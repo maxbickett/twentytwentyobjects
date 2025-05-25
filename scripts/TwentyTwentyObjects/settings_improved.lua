@@ -1,11 +1,9 @@
--- settings_improved.lua: Improved settings UI with better UX
--- Organized tabs, presets, and live preview
+-- settings_improved.lua: Enhanced menu script for Twenty Twenty Objects Mod
+-- Creates an improved configuration interface with quick-start presets
 
 local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
-local input = require('openmw.input')
 local async = require('openmw.async')
-local core = require('openmw.core')
 
 local storage = require('scripts.TwentyTwentyObjects.util.storage')
 local logger = require('scripts.TwentyTwentyObjects.util.logger')
@@ -183,12 +181,6 @@ local function createPresetCard(preset)
                                 currentTab = "profiles"
                                 selectedProfileIndex = #profiles
                                 I.TwentyTwentyObjects.refreshUI()
-                                
-                                -- Show success message
-                                core.sendGlobalEvent('ShowMessage', {
-                                    text = preset.name .. " profile added!",
-                                    duration = 2
-                                })
                             end
                         }
                     }

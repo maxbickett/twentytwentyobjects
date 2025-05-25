@@ -3,7 +3,6 @@
 
 local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
-local input = require('openmw.input')
 local async = require('openmw.async')
 
 -- Import utilities
