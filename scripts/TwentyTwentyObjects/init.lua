@@ -1,4 +1,4 @@
--- init.lua: Global script for Interactable Highlight Mod
+-- init.lua: Global script for Twenty Twenty Objects Mod
 -- Handles hotkey detection and profile management
 
 local world = require('openmw.world')
@@ -6,8 +6,8 @@ local input = require('openmw.input')
 local async = require('openmw.async')
 
 -- Import our utility modules
-local storage = require('scripts.InteractableHighlight.util.storage')
-local logger = require('scripts.InteractableHighlight.util.logger')
+local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
 
 -- Initialize utilities
 logger.init(storage)
@@ -41,7 +41,7 @@ end
 local function sendToPlayer(event, data)
     local player = world.players[1]
     if player then
-        player:sendEvent('IH_' .. event, data)
+        player:sendEvent('TTO_' .. event, data)
         logger.debug(string.format('Sent event %s to player', event))
     else
         logger.error('No player found to send event')
@@ -108,13 +108,13 @@ local function onLoad()
     -- Reset active states on load
     activeProfileIndex = nil
     momentaryProfileIndex = nil
-    logger.info('Interactable Highlight mod loaded')
+    logger.info('Twenty Twenty Objects mod loaded')
     
     -- Log initial profile count
     logger.debug(string.format('Loaded %d profiles', #profiles))
 end
 
-logger.info('Interactable Highlight global script initialized')
+logger.info('Twenty Twenty Objects global script initialized')
 
 return {
     engineHandlers = {

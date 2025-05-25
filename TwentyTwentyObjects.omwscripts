@@ -1,0 +1,3 @@
+GLOBAL: scripts/TwentyTwentyObjects/init.lua
+PLAYER: scripts/TwentyTwentyObjects/player_native.lua
+MENU: scripts/TwentyTwentyObjects/settings_improved.lua

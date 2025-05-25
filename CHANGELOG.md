@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the Interactable Highlight mod will be documented in this file.
+All notable changes to the Twenty Twenty Objects mod will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Initial release of Interactable Highlight mod
+- Initial release of Twenty Twenty Objects mod
 - Customizable hotkey profiles with modifier support
 - Object type filtering system
   - NPCs and Creatures

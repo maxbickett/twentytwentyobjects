@@ -9,13 +9,13 @@ local self = require('openmw.self')
 local async = require('openmw.async')
 
 -- Import utilities
-local projection = require('scripts.InteractableHighlight.util.projection')
-local logger = require('scripts.InteractableHighlight.util.logger')
-local storage = require('scripts.InteractableHighlight.util.storage')
-local spatial = require('scripts.InteractableHighlight.util.spatial')
-local occlusion = require('scripts.InteractableHighlight.util.occlusion')
-local labelRenderer = require('scripts.InteractableHighlight.util.labelRenderer_native')
-local labelLayout = require('scripts.InteractableHighlight.util.labelLayout_jitter')
+local projection = require('scripts.TwentyTwentyObjects.util.projection')
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
+local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local spatial = require('scripts.TwentyTwentyObjects.util.spatial')
+local occlusion = require('scripts.TwentyTwentyObjects.util.occlusion')
+local labelRenderer = require('scripts.TwentyTwentyObjects.util.labelRenderer_native')
+local labelLayout = require('scripts.TwentyTwentyObjects.util.labelLayout_jitter')
 
 -- Initialize
 logger.init(storage)
@@ -455,7 +455,7 @@ local function onLoad()
     logger.debug('Native player script loaded')
 end
 
-logger.info('Interactable Highlight native player script initialized')
+logger.info('Twenty Twenty Objects native player script initialized')
 
 return {
     engineHandlers = {
@@ -463,7 +463,7 @@ return {
         onLoad = onLoad
     },
     eventHandlers = {
-        IH_ShowHighlights = onShowHighlights,
-        IH_HideHighlights = onHideHighlights
+        TTO_ShowHighlights = onShowHighlights,
+        TTO_HideHighlights = onHideHighlights
     }
 }

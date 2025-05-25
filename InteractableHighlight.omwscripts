@@ -1,3 +1,0 @@
-GLOBAL: scripts/InteractableHighlight/init.lua
-PLAYER: scripts/InteractableHighlight/player_native.lua
-MENU: scripts/InteractableHighlight/settings_improved.lua

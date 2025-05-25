@@ -7,7 +7,7 @@
 ## Installation Steps
 
 1. **Download** this mod folder
-2. **Copy** the entire `InteractableHighlight` folder to your OpenMW data directory:
+2. **Copy** the entire `TwentyTwentyObjects` folder to your OpenMW data directory:
    - **Windows**: `Documents/My Games/OpenMW/data/`
    - **Linux**: `~/.local/share/openmw/data/`
    - **macOS**: `~/Documents/OpenMW/data/`
@@ -20,7 +20,7 @@
 
 4. **Add the mod** to your load order:
    - In OpenMW Launcher, go to Data Files
-   - Check the box next to `InteractableHighlight.omwscripts`
+   - Check the box next to `TwentyTwentyObjects.omwscripts`
 
 5. **Launch the game**
 
@@ -29,7 +29,7 @@
 - **F2**: Cycle label modes (all objects → containers only → off)
 
 ## Settings
-- Press ESC → Options → Scripts → Interactable Highlight
+- Press ESC → Options → Scripts → Twenty Twenty Objects
 - Adjust hotkeys, distance, visual settings
 
 ## Troubleshooting

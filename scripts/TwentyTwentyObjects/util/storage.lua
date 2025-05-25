@@ -1,10 +1,10 @@
--- storage.lua: Storage wrapper for Interactable Highlight mod
--- Provides a clean interface for persistent configuration
+-- storage.lua: Storage utilities for Twenty Twenty Objects Mod
+-- Handles persistent settings and profile management
 
 local storage = require('openmw.storage')
 
--- Get our dedicated storage section
-local modConfig = storage.globalSection('InteractableHighlight')
+-- Storage section for this mod's data
+local modConfig = storage.globalSection('TwentyTwentyObjects')
 
 local M = {}
 

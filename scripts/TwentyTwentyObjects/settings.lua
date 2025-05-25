@@ -1,5 +1,5 @@
--- settings.lua: Menu script for Interactable Highlight Mod configuration UI
--- Registers a settings page in OpenMW's mod settings menu
+-- settings.lua: Menu script for Twenty Twenty Objects Mod
+-- Creates the configuration interface in OpenMW's settings menu
 
 local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
@@ -7,8 +7,8 @@ local input = require('openmw.input')
 local async = require('openmw.async')
 
 -- Import utilities
-local storage = require('scripts.InteractableHighlight.util.storage')
-local logger = require('scripts.InteractableHighlight.util.logger')
+local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
 
 -- Initialize logger
 logger.init(storage)
@@ -338,7 +338,7 @@ local function createProfileList()
             events = {
                 mouseClick = function()
                     selectedProfileIndex = i
-                    I.InteractableHighlight.refreshUI()
+                    I.TwentyTwentyObjects.refreshUI()
                 end
             }
         })
@@ -409,7 +409,7 @@ local function createSettingsLayout()
                                         })
                                         selectedProfileIndex = #profiles
                                         saveProfiles()
-                                        I.InteractableHighlight.refreshUI()
+                                        I.TwentyTwentyObjects.refreshUI()
                                     end
                                 }
                             },
@@ -426,7 +426,7 @@ local function createSettingsLayout()
                                             table.remove(profiles, selectedProfileIndex)
                                             selectedProfileIndex = math.min(selectedProfileIndex, #profiles)
                                             saveProfiles()
-                                            I.InteractableHighlight.refreshUI()
+                                            I.TwentyTwentyObjects.refreshUI()
                                         end
                                     end
                                 }
@@ -460,7 +460,7 @@ end
 -- Interface for updating UI
 local settingsPage = nil
 
-I.InteractableHighlight = {
+I.TwentyTwentyObjects = {
     refreshUI = function()
         if settingsPage then
             settingsPage.element.layout.content = ui.content({
@@ -482,7 +482,7 @@ local function onKeyPress(key)
             profile.alt = key.withAlt
             saveProfiles()
             awaitingKeypress = false
-            I.InteractableHighlight.refreshUI()
+            I.TwentyTwentyObjects.refreshUI()
         end
     end
 end
@@ -491,9 +491,9 @@ end
 local function onInit()
     -- Register settings page
     settingsPage = ui.registerSettingsPage({
-        key = 'InteractableHighlight',
-        l10n = 'InteractableHighlight',
-        name = 'Interactable Highlight',
+        key = 'TwentyTwentyObjects',
+        l10n = 'TwentyTwentyObjects',
+        name = 'Twenty Twenty Objects',
         element = ui.create({
             type = ui.TYPE.Container,
             content = ui.content({
@@ -506,8 +506,8 @@ local function onInit()
 end
 
 return {
-    interfaceName = 'InteractableHighlight',
-    interface = I.InteractableHighlight,
+    interfaceName = 'TwentyTwentyObjects',
+    interface = I.TwentyTwentyObjects,
     engineHandlers = {
         onInit = onInit,
         onKeyPress = onKeyPress

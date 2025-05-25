@@ -1,5 +1,5 @@
--- player.lua: Player local script for Interactable Highlight Mod
--- Handles object scanning and HUD label management
+-- player.lua: Player script for Twenty Twenty Objects Mod
+-- Handles object scanning and label display
 
 local nearby = require('openmw.nearby')
 local ui = require('openmw.ui')
@@ -9,9 +9,9 @@ local self = require('openmw.self')
 local async = require('openmw.async')
 
 -- Import utilities
-local projection = require('scripts.InteractableHighlight.util.projection')
-local logger = require('scripts.InteractableHighlight.util.logger')
-local storage = require('scripts.InteractableHighlight.util.storage')
+local projection = require('scripts.TwentyTwentyObjects.util.projection')
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
+local storage = require('scripts.TwentyTwentyObjects.util.storage')
 
 -- Initialize logger
 logger.init(storage)
@@ -320,7 +320,7 @@ return {
         onLoad = onLoad
     },
     eventHandlers = {
-        IH_ShowHighlights = onShowHighlights,
-        IH_HideHighlights = onHideHighlights
+        TTO_ShowHighlights = onShowHighlights,
+        TTO_HideHighlights = onHideHighlights
     }
 }

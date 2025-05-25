@@ -1,4 +1,4 @@
-# Interactable Highlight for OpenMW
+# Twenty Twenty Objects for OpenMW
 
 A dynamic object highlighting mod for OpenMW 0.49+ that displays floating text labels above interactable objects when triggered by customizable hotkeys. Perfect for finding loot in dark dungeons, tracking NPCs in crowded cities, or spotting that elusive book on a cluttered shelf.
 
@@ -45,19 +45,19 @@ A dynamic object highlighting mod for OpenMW 0.49+ that displays floating text l
 ### Manual Installation
 
 1. Download the latest release
-2. Extract the `InteractableHighlight` folder to your OpenMW `Data Files` directory
+2. Extract the `TwentyTwentyObjects` folder to your OpenMW `Data Files` directory
 3. Open the OpenMW Launcher
 4. Go to the Data Files tab
-5. Enable `InteractableHighlight.omwscripts`
+5. Enable `TwentyTwentyObjects.omwscripts`
 6. Launch the game
 
 ### Directory Structure
 ```
 Data Files/
-└── InteractableHighlight/
-    ├── InteractableHighlight.omwscripts
+└── TwentyTwentyObjects/
+    ├── TwentyTwentyObjects.omwscripts
     └── scripts/
-        └── InteractableHighlight/
+        └── TwentyTwentyObjects/
             ├── init.lua
             ├── player.lua
             ├── player_native.lua
@@ -77,7 +77,7 @@ Data Files/
 
 New to the mod? Follow these steps:
 
-1. Open Settings → Mods → Interactable Highlight
+1. Open Settings → Mods → Twenty Twenty Objects
 2. Click the "Quick Start" tab
 3. Choose a preset that matches your playstyle:
    - **🗡️ Loot Hunter**: Find valuable items and containers (Press E)
@@ -104,7 +104,7 @@ The mod comes with two pre-configured profiles:
 ### Configuring Profiles
 
 1. Open the game menu (Esc)
-2. Go to Settings → Mods → Interactable Highlight
+2. Go to Settings → Mods → Twenty Twenty Objects
 3. Select a profile to edit or click "Add" to create a new one
 4. Configure:
    - **Name**: Display name for the profile

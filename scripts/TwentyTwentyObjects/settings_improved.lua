@@ -7,8 +7,8 @@ local input = require('openmw.input')
 local async = require('openmw.async')
 local core = require('openmw.core')
 
-local storage = require('scripts.InteractableHighlight.util.storage')
-local logger = require('scripts.InteractableHighlight.util.logger')
+local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
 
 logger.init(storage)
 
@@ -114,7 +114,7 @@ local function createTabButton(tab, isActive)
         events = {
             mouseClick = function()
                 currentTab = tab.id
-                I.InteractableHighlight.refreshUI()
+                I.TwentyTwentyObjects.refreshUI()
             end
         }
     }
@@ -182,7 +182,7 @@ local function createPresetCard(preset)
                                 -- Switch to profiles tab
                                 currentTab = "profiles"
                                 selectedProfileIndex = #profiles
-                                I.InteractableHighlight.refreshUI()
+                                I.TwentyTwentyObjects.refreshUI()
                                 
                                 -- Show success message
                                 core.sendGlobalEvent('ShowMessage', {
@@ -472,7 +472,7 @@ local function createToggle(label, value, onChange)
                 events = {
                     mouseClick = function()
                         onChange(not value)
-                        I.InteractableHighlight.refreshUI()
+                        I.TwentyTwentyObjects.refreshUI()
                     end
                 }
             }
@@ -540,7 +540,7 @@ local function createRangeSlider(label, value, min, max, onChange)
                         local clickPercent = e.position.x / 300
                         local newValue = min + (max - min) * clickPercent
                         onChange(math.floor(newValue))
-                        I.InteractableHighlight.refreshUI()
+                        I.TwentyTwentyObjects.refreshUI()
                     end
                 }
             }
@@ -612,7 +612,7 @@ local function createFilterCategories(filters)
                             filters.misc = true
                         end
                         storage.setProfiles(storage.getProfiles())
-                        I.InteractableHighlight.refreshUI()
+                        I.TwentyTwentyObjects.refreshUI()
                     end),
                     -- Indented subtypes
                     {
@@ -702,7 +702,7 @@ local function createCheckbox(label, checked, onChange)
                 events = {
                     mouseClick = function()
                         onChange(not checked)
-                        I.InteractableHighlight.refreshUI()
+                        I.TwentyTwentyObjects.refreshUI()
                     end
                 }
             },
@@ -843,7 +843,7 @@ local function createStylePreview(name, style, isSelected)
                 local appearance = storage.get('appearance', {})
                 appearance.labelStyle = style
                 storage.set('appearance', appearance)
-                I.InteractableHighlight.refreshUI()
+                I.TwentyTwentyObjects.refreshUI()
             end
         }
     }
@@ -1033,7 +1033,7 @@ local function createMainLayout()
 end
 
 -- Interface
-I.InteractableHighlight = {
+I.TwentyTwentyObjects = {
     refreshUI = function()
         if settingsPage then
             settingsPage.element.layout = createMainLayout()
@@ -1045,8 +1045,8 @@ I.InteractableHighlight = {
 -- Initialize
 local function onInit()
     settingsPage = ui.registerSettingsPage({
-        key = 'InteractableHighlight',
-        l10n = 'InteractableHighlight',
+        key = 'TwentyTwentyObjects',
+        l10n = 'TwentyTwentyObjects',
         name = 'Interactable Highlight',
         element = ui.create(createMainLayout())
     })
@@ -1055,8 +1055,8 @@ local function onInit()
 end
 
 return {
-    interfaceName = 'InteractableHighlight',
-    interface = I.InteractableHighlight,
+    interfaceName = 'TwentyTwentyObjects',
+    interface = I.TwentyTwentyObjects,
     engineHandlers = {
         onInit = onInit
     }
