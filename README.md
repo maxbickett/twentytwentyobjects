@@ -1,6 +1,10 @@
 # Twenty Twenty Objects for OpenMW
 
-A dynamic object highlighting mod for OpenMW 0.49+ that displays floating text labels above interactable objects when triggered by customizable hotkeys. Perfect for finding loot in dark dungeons, tracking NPCs in crowded cities, or spotting that elusive book on a cluttered shelf.
+You know how you can understand what things are without having to look at each one through a microscope?  Ever feel like Morrowind was making you look at the world through a long cardboard tube to see what is out there?  Have trouble picking the game back up after playing BG3
+
+Well, I developed this mod to let you see the names of objects wihtout having to hover your target over everything. It also has some pretty nift features to let you configure specifc hot keys to pop up specific item types at specific distances, so you're not always cluttered.
+
+This is a dynamic object highlighting mod for OpenMW 0.49+ that displays floating text labels above interactable objects when triggered by customizable hotkeys. Perfect for finding loot in dark dungeons, tracking NPCs in crowded cities, or spotting that elusive book on a cluttered shelf.
 
 ## Features
 
@@ -45,32 +49,34 @@ A dynamic object highlighting mod for OpenMW 0.49+ that displays floating text l
 ### Manual Installation
 
 1. Download the latest release
-2. Extract the `TwentyTwentyObjects` folder to your OpenMW `Data Files` directory
-3. Open the OpenMW Launcher
-4. Go to the Data Files tab
-5. Enable `TwentyTwentyObjects.omwscripts`
-6. Launch the game
+2. Extract the `TwentyTwentyObjects` folder
+3. Add the scripts location to your OpenMW config
+4. Open the OpenMW Launcher
+6. Enable `TwentyTwentyObjects.omwscripts`
+7. Launch the game
 
 ### Directory Structure
 ```
-Data Files/
-└── TwentyTwentyObjects/
-    ├── TwentyTwentyObjects.omwscripts
-    └── scripts/
-        └── TwentyTwentyObjects/
-            ├── init.lua
-            ├── player.lua
-            ├── player_native.lua
-            ├── settings.lua
-            ├── settings_improved.lua
-            └── util/
-                ├── labelLayout_jitter.lua
-                ├── labelRenderer_native.lua
-                ├── logger.lua
-                ├── occlusion.lua
-                ├── projection.lua
-                ├── spatial.lua
-                └── storage.lua
+TwentyTwentyObjects/
+├── TwentyTwentyObjects.omwscripts
+└── scripts/
+    └── TwentyTwentyObjects/
+        ├── init.lua
+        ├── player.lua
+        ├── player_native.lua
+        ├── player_optimized.lua
+        ├── settings.lua
+        ├── settings_improved.lua
+        └── util/
+            ├── labelLayout.lua
+            ├── labelLayout_jitter.lua
+            ├── labelRenderer.lua
+            ├── labelRenderer_native.lua
+            ├── logger.lua
+            ├── occlusion.lua
+            ├── projection.lua
+            ├── spatial.lua
+            └── storage.lua
 ```
 
 ## Quick Start
