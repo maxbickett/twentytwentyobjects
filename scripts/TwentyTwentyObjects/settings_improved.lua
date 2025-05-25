@@ -4,11 +4,17 @@
 local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
 local async = require('openmw.async')
+local input = require('openmw.input') -- For key press handling WITHIN THE MENU (e.g. binding)
+-- local world = require('openmw.world') -- REMOVED: Not available in MENU context
 
-local storage = require('scripts.TwentyTwentyObjects.util.storage')
-local logger = require('scripts.TwentyTwentyObjects.util.logger')
+local storage_module = require('scripts.TwentyTwentyObjects.util.storage')
+local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
 
-logger.init(storage)
+-- Forward declare variables that will be initialized in onInit
+local profiles = {}
+local appearanceSettings = {}
+local performanceSettings = {}
+local generalSettings = {} -- For debug mode, etc.
 
 -- UI State
 local currentTab = "presets"  -- Start with presets for new users
@@ -87,6 +93,36 @@ local TABS = {
     {id = "performance", label = "Performance", icon = "⚙️"},
     {id = "help", label = "Help", icon = "❓"}
 }
+
+logger.init(storage)
+
+-- Helper: Save current profiles to storage
+local function saveProfiles()
+    if not storage_module then return end -- Guard against calls before onInit
+    storage_module.setProfiles(profiles)
+    logger_module.debug("Profiles saved to storage")
+end
+
+-- Helper: Save appearance settings
+local function saveAppearanceSettings()
+    if not storage_module then return end
+    storage_module.set('appearance', appearanceSettings)
+    logger_module.debug("Appearance settings saved")
+end
+
+-- Helper: Save performance settings
+local function savePerformanceSettings()
+    if not storage_module then return end
+    storage_module.set('performance', performanceSettings)
+    logger_module.debug("Performance settings saved")
+end
+
+-- Helper: Save general settings
+local function saveGeneralSettings()
+    if not storage_module then return end
+    storage_module.set('general', generalSettings)
+    logger_module.debug("General settings saved")
+end
 
 -- Helper: Create tab button
 local function createTabButton(tab, isActive)
@@ -173,13 +209,12 @@ local function createPresetCard(preset)
                         events = {
                             mouseClick = function()
                                 -- Add preset as new profile
-                                local profiles = storage.getProfiles()
                                 table.insert(profiles, preset.profile)
-                                storage.setProfiles(profiles)
+                                selectedProfileIndex = #profiles
+                                saveProfiles() -- This will save the updated local 'profiles' table
                                 
                                 -- Switch to profiles tab
                                 currentTab = "profiles"
-                                selectedProfileIndex = #profiles
                                 I.TwentyTwentyObjects.refreshUI()
                             end
                         }
@@ -256,7 +291,6 @@ local function createTabContent()
         
     elseif currentTab == "profiles" then
         -- Profiles tab (existing functionality but better organized)
-        local profiles = storage.getProfiles()
         local profile = profiles[selectedProfileIndex]
         
         if not profile then
@@ -389,12 +423,12 @@ local function createSettingsSection(profile)
                     -- Mode toggle
                     createToggle("Hold to Show", not profile.modeToggle, function(value)
                         profile.modeToggle = not value
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                     end),
                     -- Range slider with visual indicator
                     createRangeSlider("Detection Range", profile.radius, 100, 3000, function(value)
                         profile.radius = value
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                     end)
                 })
             },
@@ -567,11 +601,11 @@ local function createFilterCategories(filters)
                     },
                     createCheckbox("NPCs", filters.npcs, function(v)
                         filters.npcs = v
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                     end),
                     createCheckbox("Creatures", filters.creatures, function(v)
                         filters.creatures = v
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                     end)
                 })
             },
@@ -603,7 +637,7 @@ local function createFilterCategories(filters)
                             filters.ingredients = true
                             filters.misc = true
                         end
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                         I.TwentyTwentyObjects.refreshUI()
                     end),
                     -- Indented subtypes
@@ -616,17 +650,17 @@ local function createFilterCategories(filters)
                             createCheckbox("Weapons", filters.weapons, function(v)
                                 filters.weapons = v
                                 if not v then filters.items = false end
-                                storage.setProfiles(storage.getProfiles())
+                                saveProfiles() -- Saves the entire 'profiles' table
                             end),
                             createCheckbox("Armor", filters.armor, function(v)
                                 filters.armor = v
                                 if not v then filters.items = false end
-                                storage.setProfiles(storage.getProfiles())
+                                saveProfiles() -- Saves the entire 'profiles' table
                             end),
                             createCheckbox("Books", filters.books, function(v)
                                 filters.books = v
                                 if not v then filters.items = false end
-                                storage.setProfiles(storage.getProfiles())
+                                saveProfiles() -- Saves the entire 'profiles' table
                             end)
                         })
                     }
@@ -648,11 +682,11 @@ local function createFilterCategories(filters)
                     },
                     createCheckbox("Containers", filters.containers, function(v)
                         filters.containers = v
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                     end),
                     createCheckbox("Doors", filters.doors, function(v)
                         filters.doors = v
-                        storage.setProfiles(storage.getProfiles())
+                        saveProfiles() -- Saves the entire 'profiles' table
                     end)
                 })
             }
@@ -711,14 +745,20 @@ end
 
 -- Create appearance settings
 local function createAppearanceSettings()
-    local appearance = storage.get('appearance', {
-        labelStyle = "outlined",
-        textSize = "medium",
-        opacity = 0.9,
-        fadeDistance = true,
-        groupSimilar = true
-    })
-    
+    -- Ensure appearanceSettings is populated
+    if not appearanceSettings.labelStyle then
+        appearanceSettings = storage_module.get('appearance', { -- Default values if not found
+            labelStyle = "native",
+            textSize = "medium",
+            lineStyle = "straight",
+            lineColor = {r=0.8, g=0.8, b=0.8, a=0.7},
+            backgroundColor = {r=0, g=0, b=0, a=0.5},
+            showIcons = true,
+            enableAnimations = true,
+            animationSpeed = "normal"
+        })
+    end
+
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -760,28 +800,28 @@ local function createAppearanceSettings()
                             arrange = ui.ALIGNMENT.Start
                         },
                         content = ui.content({
-                            createStylePreview("Outlined", "outlined", appearance.labelStyle == "outlined"),
-                            createStylePreview("Solid BG", "solid", appearance.labelStyle == "solid"),
-                            createStylePreview("Minimal", "minimal", appearance.labelStyle == "minimal")
+                            createStylePreview("Outlined", "outlined", appearanceSettings.labelStyle == "outlined"),
+                            createStylePreview("Solid BG", "solid", appearanceSettings.labelStyle == "solid"),
+                            createStylePreview("Minimal", "minimal", appearanceSettings.labelStyle == "minimal")
                         })
                     }
                 })
             },
             
             -- Other appearance options
-            createToggle("Fade with distance", appearance.fadeDistance, function(v)
-                appearance.fadeDistance = v
-                storage.set('appearance', appearance)
+            createToggle("Fade with distance", appearanceSettings.fadeDistance, function(v)
+                appearanceSettings.fadeDistance = v
+                saveAppearanceSettings()
             end),
             
-            createToggle("Group similar items", appearance.groupSimilar, function(v)
-                appearance.groupSimilar = v
-                storage.set('appearance', appearance)
+            createToggle("Group similar items", appearanceSettings.groupSimilar, function(v)
+                appearanceSettings.groupSimilar = v
+                saveAppearanceSettings()
             end),
             
-            createRangeSlider("Label opacity", appearance.opacity * 100, 30, 100, function(v)
-                appearance.opacity = v / 100
-                storage.set('appearance', appearance)
+            createRangeSlider("Label opacity", appearanceSettings.opacity * 100, 30, 100, function(v)
+                appearanceSettings.opacity = v / 100
+                saveAppearanceSettings()
             end)
         })
     }
@@ -832,9 +872,8 @@ local function createStylePreview(name, style, isSelected)
         }),
         events = {
             mouseClick = function()
-                local appearance = storage.get('appearance', {})
-                appearance.labelStyle = style
-                storage.set('appearance', appearance)
+                appearanceSettings.labelStyle = style
+                saveAppearanceSettings()
                 I.TwentyTwentyObjects.refreshUI()
             end
         }
@@ -843,13 +882,16 @@ end
 
 -- Create performance settings
 local function createPerformanceSettings()
-    local performance = storage.get('performance', {
-        maxLabels = 25,
-        updateRate = "balanced",
-        occlusion = "medium",
-        smartGrouping = true
-    })
-    
+    if not performanceSettings.maxLabels then
+         performanceSettings = storage_module.get('performance', { -- Default values
+            maxLabels = 20,
+            updateInterval = "medium", -- e.g., 0.05s
+            scanInterval = "medium",   -- e.g., 0.25s
+            distanceCulling = true,
+            cullDistance = 2000,
+            occlusionChecks = "basic" -- none, basic, advanced (raycast)
+        })
+    end
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -889,9 +931,9 @@ local function createPerformanceSettings()
                             horizontal = true
                         },
                         content = ui.content({
-                            createPerformancePreset("Potato", "low", performance.updateRate == "low"),
-                            createPerformancePreset("Balanced", "balanced", performance.updateRate == "balanced"),
-                            createPerformancePreset("Ultra", "high", performance.updateRate == "high")
+                            createPerformancePreset("Potato", "low", performanceSettings.updateInterval == "low"),
+                            createPerformancePreset("Balanced", "balanced", performanceSettings.updateInterval == "balanced"),
+                            createPerformancePreset("Ultra", "high", performanceSettings.updateInterval == "high")
                         })
                     }
                 })
@@ -907,20 +949,36 @@ local function createPerformanceSettings()
                 }
             },
             
-            createRangeSlider("Max labels shown", performance.maxLabels, 5, 50, function(v)
-                performance.maxLabels = v
-                storage.set('performance', performance)
+            createRangeSlider("Max labels shown", performanceSettings.maxLabels, 5, 50, function(v)
+                performanceSettings.maxLabels = v
+                savePerformanceSettings()
             end),
             
-            createToggle("Hide labels behind walls", performance.occlusion ~= "none", function(v)
-                performance.occlusion = v and "medium" or "none"
-                storage.set('performance', performance)
+            createToggle("Hide labels behind walls", performanceSettings.occlusionChecks ~= "none", function(v)
+                performanceSettings.occlusionChecks = v and "basic" or "none"
+                savePerformanceSettings()
             end),
             
-            createToggle("Smart grouping", performance.smartGrouping, function(v)
-                performance.smartGrouping = v
-                storage.set('performance', performance)
-            end)
+            createToggle("Smart grouping", performanceSettings.smartGrouping, function(v)
+                performanceSettings.smartGrouping = v
+                savePerformanceSettings()
+            end),
+
+            {
+                type = ui.TYPE.Text,
+                props = {
+                    text = (generalSettings.debug and "[X] Debug Logging" or "[ ] Debug Logging"),
+                    textSize = 14
+                },
+                events = {
+                    mouseClick = function()
+                        generalSettings.debug = not generalSettings.debug
+                        saveGeneralSettings()
+                        logger_module.init(storage_module, generalSettings.debug) -- Re-init logger with new debug state
+                        I.TwentyTwentyObjects.refreshUI()
+                    end
+                }
+            }
         })
     }
 end
@@ -1036,6 +1094,37 @@ I.TwentyTwentyObjects = {
 
 -- Initialize
 local function onInit()
+    -- Initialize logger (now safe as storage is active)
+    generalSettings = storage_module.get('general', { debug = false })
+    logger_module.init(storage_module, generalSettings.debug)
+
+    -- Load profiles and other settings from storage (now safe)
+    profiles = storage_module.getProfiles() -- Ensures a table
+    if #profiles == 0 then -- If storage was empty or reset, initialize with a default if desired
+        logger_module.info("No profiles found in storage. Consider adding a default or guiding user.")
+        -- Example: Add a default starter profile if none exist.
+        -- table.insert(profiles, { name = "Default Starter", key = 'h', ... etc ... })
+        -- saveProfiles() -- Don't forget to save if you add one
+    end
+
+    appearanceSettings = storage_module.get('appearance', {
+        labelStyle = "native", textSize = "medium", lineColor = {r=0.8, g=0.8, b=0.8, a=0.7},
+        backgroundColor = {r=0, g=0, b=0, a=0.5}, showIcons = true,
+        enableAnimations = true, animationSpeed = "normal"
+    })
+    performanceSettings = storage_module.get('performance', {
+        maxLabels = 20, updateInterval = "medium", scanInterval = "medium",
+        distanceCulling = true, cullDistance = 2000, occlusionChecks = "basic"
+    })
+    
+    -- Ensure selectedProfileIndex is valid
+    if selectedProfileIndex > #profiles and #profiles > 0 then
+        selectedProfileIndex = #profiles
+    elseif #profiles == 0 then
+        selectedProfileIndex = 1 -- Or handle no profiles state in UI
+    end
+
+    -- Register settings page
     settingsPage = ui.registerSettingsPage({
         key = 'TwentyTwentyObjects',
         l10n = 'TwentyTwentyObjects',
@@ -1043,7 +1132,7 @@ local function onInit()
         element = ui.create(createMainLayout())
     })
     
-    logger.info('Improved settings page registered')
+    logger_module.info('Improved settings page registered')
 end
 
 return {

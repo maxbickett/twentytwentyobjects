@@ -10,16 +10,18 @@ local async = require('openmw.async')
 
 -- Import utilities
 local projection = require('scripts.TwentyTwentyObjects.util.projection')
-local logger = require('scripts.TwentyTwentyObjects.util.logger')
-local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
+local storage_module = require('scripts.TwentyTwentyObjects.util.storage')
 local spatial = require('scripts.TwentyTwentyObjects.util.spatial')
 local occlusion = require('scripts.TwentyTwentyObjects.util.occlusion')
 local labelRenderer = require('scripts.TwentyTwentyObjects.util.labelRenderer_native')
 local labelLayout = require('scripts.TwentyTwentyObjects.util.labelLayout_jitter')
 
--- Initialize
-logger.init(storage)
-labelRenderer.init()
+-- Forward declare
+local generalSettings = {}
+
+-- Initialize (defer storage-dependent parts to onLoad)
+-- labelRenderer.init() -- If this uses storage, move to onLoad
 
 -- Configuration
 local CONFIG = {
@@ -122,7 +124,7 @@ end
 
 -- Scan and create labels with jittering
 local function scanAndCreateLabels(profile)
-    logger.info(string.format('Native scan with profile: %s', profile.name))
+    logger_module.info(string.format('Native scan with profile: %s', profile.name))
     
     -- Clear existing
     clearAllLabels()
@@ -132,7 +134,7 @@ local function scanAndCreateLabels(profile)
     local candidates = {}
     
     -- Get occlusion method based on performance settings
-    local performance = storage.get('performance', {occlusion = "medium"})
+    local performance = storage_module.get('performance', {occlusion = "medium"})
     local checkOcclusion = occlusion.getOcclusionMethod(performance.occlusion)
     
     -- Gather all nearby objects
@@ -263,7 +265,7 @@ local function scanAndCreateLabels(profile)
         })
     end
     
-    logger.debug(string.format('Created %d labels with jittering', #activeLabels))
+    logger_module.debug(string.format('Created %d labels with jittering', #activeLabels))
 end
 
 -- Update label positions and lines
@@ -451,11 +453,17 @@ local function onUpdate(dt)
 end
 
 local function onLoad()
+    -- Initialize logger (now safe as storage is active)
+    generalSettings = storage_module.get('general', { debug = false })
+    logger_module.init(storage_module, generalSettings.debug)
+    
+    labelRenderer.init() -- Assuming this is safe here, or if it uses storage, it's now fine.
+
     projection.updateScreenSize()
-    logger.debug('Native player script loaded')
+    logger_module.debug('Native player script loaded')
 end
 
-logger.info('Twenty Twenty Objects native player script initialized')
+logger_module.info('Twenty Twenty Objects native player script (player_native.lua) parsed.')
 
 return {
     engineHandlers = {

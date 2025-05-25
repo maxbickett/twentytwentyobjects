@@ -10,11 +10,11 @@ local async = require('openmw.async')
 
 -- Import utilities
 local projection = require('scripts.TwentyTwentyObjects.util.projection')
-local logger = require('scripts.TwentyTwentyObjects.util.logger')
-local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
+local storage_module = require('scripts.TwentyTwentyObjects.util.storage')
 
--- Initialize logger
-logger.init(storage)
+-- Forward declare
+local generalSettings = {}
 
 -- Active labels tracking
 local activeLabels = {}
@@ -70,7 +70,7 @@ end
 
 -- Helper: Destroy all active labels
 local function clearAllLabels()
-    logger.debug(string.format('Clearing %d labels', #activeLabels))
+    logger_module.debug(string.format('Clearing %d labels', #activeLabels))
     
     for _, labelData in ipairs(activeLabels) do
         if labelData.ui then
@@ -159,7 +159,7 @@ end
 
 -- Scan for objects and create labels
 local function scanAndCreateLabels(profile)
-    logger.info(string.format('Scanning with profile: %s', profile.name))
+    logger_module.info(string.format('Scanning with profile: %s', profile.name))
     
     -- Clear existing labels
     clearAllLabels()
@@ -224,7 +224,7 @@ local function scanAndCreateLabels(profile)
         end
     end
     
-    logger.debug(string.format('Found %d objects to highlight', #targets))
+    logger_module.debug(string.format('Found %d objects to highlight', #targets))
     
     -- Create labels for all targets
     for _, object in ipairs(targets) do
@@ -307,12 +307,16 @@ end
 
 -- Engine handler: Load
 local function onLoad()
+    -- Initialize logger (now safe as storage is active)
+    generalSettings = storage_module.get('general', { debug = false })
+    logger_module.init(storage_module, generalSettings.debug)
+
     -- Update screen size cache
     projection.updateScreenSize()
-    logger.debug('Player script loaded')
+    logger_module.debug('Player script loaded')
 end
 
-logger.info('Interactable Highlight player script initialized')
+logger_module.info('Interactable Highlight player script (player.lua) parsed.') -- Log when script file itself is parsed
 
 return {
     engineHandlers = {

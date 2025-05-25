@@ -4,20 +4,20 @@
 local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
 local async = require('openmw.async')
-local input = require('openmw.input')
-local world = require('openmw.world')
+local input = require('openmw.input') -- For key press handling WITHIN THE MENU (e.g. binding)
+-- local world = require('openmw.world') -- REMOVED: Not available in MENU context
 
 -- Import utilities
-local storage = require('scripts.TwentyTwentyObjects.util.storage')
-local logger = require('scripts.TwentyTwentyObjects.util.logger')
+local storage_module = require('scripts.TwentyTwentyObjects.util.storage')
+local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
 
--- Initialize logger
-logger.init(storage)
+-- Forward declare variables
+local profiles = {} -- Will be loaded in onInit
+local generalSettings = {} -- For logger debug state
 
--- Current state
+-- Current state (non-storage dependent)
 local selectedProfileIndex = 1
 local awaitingKeypress = false
-local profiles = {}
 
 -- Helper: Get key display name
 local function getKeyDisplayName(profile)
@@ -100,8 +100,9 @@ end
 
 -- Helper: Save current profiles to storage
 local function saveProfiles()
-    storage.setProfiles(profiles)
-    logger.debug("Profiles saved to storage")
+    if not storage_module then return end -- Guard
+    storage_module.setProfiles(profiles)
+    logger_module.debug("Profiles saved to storage")
 end
 
 -- Helper: Create profile editor layout
@@ -191,7 +192,7 @@ local function createProfileEditor()
                         events = {
                             mouseClick = function()
                                 awaitingKeypress = true
-                                logger.debug("Waiting for keypress...")
+                                logger_module.debug("Waiting for keypress...")
                             end
                         }
                     }
@@ -357,8 +358,6 @@ end
 
 -- Create the main settings layout
 local function createSettingsLayout()
-    profiles = storage.getProfiles()
-    
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -490,7 +489,7 @@ local function onKeyPress(key)
     -- Check all profiles for matching hotkey
     for index, profile in ipairs(profiles) do
         if isProfileHotkey(profile, key) then
-            logger.info(string.format('Hotkey pressed for profile: %s', profile.name))
+            logger_module.info(string.format('Hotkey pressed for profile: %s', profile.name))
             
             if profile.modeToggle then
                 -- Toggle mode
@@ -517,15 +516,47 @@ local function onKeyRelease(key)
     end
 end
 
--- Subscribe to storage changes to keep profiles synced
-storage.subscribe(async:callback(function(section, key)
-    if key == 'profiles' or key == nil then
-        profiles = storage.getProfiles()
-    end
-end))
-
 -- Initialize on load
 local function onInit()
+    -- Initialize logger (now safe as storage is active)
+    generalSettings = storage_module.get('general', { debug = false })
+    logger_module.init(storage_module, generalSettings.debug) -- Pass debug state if logger supports it
+
+    -- Load profiles from storage (now safe)
+    profiles = storage_module.getProfiles() -- Ensures a table
+
+    -- If profiles was empty (e.g. first run or reset), create default set
+    if #profiles == 0 then
+        logger_module.info("No profiles in storage for settings.lua. Initializing defaults.")
+        -- This is where you might re-add the original default profiles if desired for this script
+        -- For example:
+        -- profiles = {
+        --     { name = "Default Profile 1", key='h', shift=true, ...etc... },
+        --     { name = "Default Profile 2", key='j', shift=false, ...etc... }
+        -- }
+        -- storage_module.setProfiles(profiles) -- And save them back
+        -- For now, we assume that if it's empty, it's intended to be, or settings_improved created some.
+    end
+    
+    -- Ensure selectedProfileIndex is valid after loading profiles
+    if selectedProfileIndex > #profiles and #profiles > 0 then
+        selectedProfileIndex = #profiles
+    elseif #profiles == 0 then
+        selectedProfileIndex = 1 -- Or adjust UI to show "No profiles, add one"
+    end
+
+    -- Subscribe to storage changes to keep local 'profiles' table synced
+    -- This is important if another script (like init.lua or a future one) modifies profiles.
+    storage_module.subscribe(async:callback(function(section, key)
+        if key == 'profiles' or key == nil then
+            logger_module.debug("[settings.lua] Profiles changed in storage, reloading.")
+            profiles = storage_module.getProfiles()
+            if settingsPage and settingsPage.element then -- Refresh UI if page exists
+                I.TwentyTwentyObjects.refreshUI()
+            end
+        end
+    end))
+
     -- Register settings page
     settingsPage = ui.registerSettingsPage({
         key = 'TwentyTwentyObjects',
@@ -539,15 +570,15 @@ local function onInit()
         })
     })
     
-    logger.info('Settings page registered')
+    logger_module.info('Settings page registered')
 end
 
 return {
     interfaceName = 'TwentyTwentyObjects',
     interface = I.TwentyTwentyObjects,
     engineHandlers = {
-        onInit = onInit,
-        onKeyPress = onKeyPress,
-        onKeyRelease = onKeyRelease
+        onInit = onInit
+        -- onKeyPress = onKeyPress, -- REMOVED: Game hotkeys belong in PLAYER script
+        -- onKeyRelease = onKeyRelease -- REMOVED: Game hotkeys belong in PLAYER script
     }
 }

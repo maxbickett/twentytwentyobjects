@@ -10,10 +10,13 @@ local async = require('openmw.async')
 
 -- Import utilities
 local projection = require('scripts.TwentyTwentyObjects.util.projection')
-local logger = require('scripts.TwentyTwentyObjects.util.logger')
-local storage = require('scripts.TwentyTwentyObjects.util.storage')
+local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
+local storage_module = require('scripts.TwentyTwentyObjects.util.storage')
 local spatial = require('scripts.TwentyTwentyObjects.util.spatial')
 local labelLayout = require('scripts.TwentyTwentyObjects.util.labelLayout')
+
+-- Forward declare
+local generalSettings = {}
 
 -- Performance configuration
 local CONFIG = {
@@ -116,7 +119,7 @@ end
 
 -- Optimized object scanning with spatial hashing
 local function scanObjectsOptimized(profile)
-    logger.debug('Optimized scan starting')
+    logger_module.debug('Optimized scan starting')
     
     local playerPos = self.position
     local candidates = {}
@@ -386,6 +389,10 @@ end
 
 -- Load handler
 local function onLoad()
+    -- Initialize logger (now safe as storage is active)
+    generalSettings = storage_module.get('general', { debug = false })
+    logger_module.init(storage_module, generalSettings.debug)
+
     projection.updateScreenSize()
     
     -- Clear caches
@@ -393,7 +400,7 @@ local function onLoad()
     visibilityCache = {}
     labelLayout.cleanupSmoothPositions({})
     
-    logger.debug('Optimized player script loaded')
+    logger_module.debug('Optimized player script loaded')
 end
 
 -- Helper function (kept from original)
@@ -427,7 +434,7 @@ local function getObjectName(object)
     return object.recordId or "Unknown"
 end
 
-logger.info('Interactable Highlight optimized player script initialized')
+logger_module.info('Interactable Highlight optimized player script (player_optimized.lua) parsed.')
 
 return {
     engineHandlers = {
