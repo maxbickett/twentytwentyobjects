@@ -16,13 +16,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Containers
   - Doors
   - Activators
-- Floating text labels with Morrowind-style appearance
+- Native Morrowind tooltip styling (exact match to vanilla)
+- Intelligent label jittering system to prevent overlaps
+- Connecting lines between labels and objects for clarity
+- Occlusion system - labels hide behind walls
 - Hold-to-show and toggle display modes
 - Configurable detection radius (50-5000 units)
-- In-game settings menu integrated with OpenMW
+- User-friendly settings with visual presets
 - Persistent profile storage
 - Debug logging system
-- Performance-optimized scanning and rendering
+- Advanced performance optimizations:
+  - Hierarchical spatial hashing
+  - Frustum culling
+  - Priority-based label limits
 
 ### Technical
 - Event-driven architecture with no idle polling

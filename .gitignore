@@ -1,0 +1,23 @@
+# Development and testing files
+tests/
+project_plan.md
+dev_tips.md
+inspiration.md
+
+# Documentation that's not needed for end users
+OPTIMIZATION_GUIDE.md
+UX_IMPROVEMENTS.md
+NATIVE_STYLE_NOTES.md
+VISUAL_EXAMPLES.md
+
+# Old/unused script versions
+scripts/InteractableHighlight/player.lua
+scripts/InteractableHighlight/player_optimized.lua
+scripts/InteractableHighlight/settings.lua
+scripts/InteractableHighlight/util/labelLayout.lua
+scripts/InteractableHighlight/util/labelRenderer.lua
+
+# System files
+.DS_Store
+*.swp
+*.tmp

@@ -5,19 +5,35 @@ A dynamic object highlighting mod for OpenMW 0.49+ that displays floating text l
 ## Features
 
 - **Customizable Hotkey Profiles**: Create multiple profiles with different key combinations and filters
+- **Smart Occlusion**: Labels won't show through walls or closed doors
 - **Object Type Filtering**: Highlight specific object types:
   - NPCs and Creatures
   - Items (weapons, armor, clothing, books, ingredients, misc)
   - Containers
   - Doors
   - Activators
-- **Floating World Labels**: Clean text labels that hover above objects in 3D space
+- **Native Morrowind Styling**: 
+  - Exact match to vanilla tooltip appearance
+  - Dark blue-gray background with yellowish-white text
+  - Proper Morrowind font and padding
+  - Seamless visual integration
+- **Intelligent Label Placement**:
+  - Smart jittering prevents overlaps while maintaining clarity
+  - Thin connecting lines show exactly which label belongs to which object
+  - Priority-based positioning (NPCs get best spots)
+  - No confusing grouping - every object gets its own label
 - **Two Display Modes**:
   - **Hold Mode**: Labels appear while holding the hotkey
   - **Toggle Mode**: Press once to show, press again to hide
-- **Range Control**: Set custom detection radius for each profile (50-5000 units)
-- **In-Game Configuration**: Full settings menu integrated with OpenMW's mod settings
-- **Performance Optimized**: Event-driven design with no idle processing
+- **User-Friendly Configuration**:
+  - Quick-start presets for common use cases
+  - Visual settings preview
+  - Tabbed interface with helpful tooltips
+- **Performance Optimized**: 
+  - Hierarchical spatial hashing for fast queries
+  - Frustum culling and level-of-detail system
+  - Configurable quality settings
+  - No idle processing
 - **Full Compatibility**: Works with all content mods including Tamriel Rebuilt
 
 ## Requirements
@@ -44,12 +60,32 @@ Data Files/
         └── InteractableHighlight/
             ├── init.lua
             ├── player.lua
+            ├── player_native.lua
             ├── settings.lua
+            ├── settings_improved.lua
             └── util/
+                ├── labelLayout_jitter.lua
+                ├── labelRenderer_native.lua
                 ├── logger.lua
+                ├── occlusion.lua
                 ├── projection.lua
+                ├── spatial.lua
                 └── storage.lua
 ```
+
+## Quick Start
+
+New to the mod? Follow these steps:
+
+1. Open Settings → Mods → Interactable Highlight
+2. Click the "Quick Start" tab
+3. Choose a preset that matches your playstyle:
+   - **🗡️ Loot Hunter**: Find valuable items and containers (Press E)
+   - **👥 NPC Tracker**: Locate NPCs in towns or dungeons (Press Q)
+   - **💎 Thief's Eye**: Spot valuable items in shops (Shift+Z)
+   - **🏛️ Dungeon Delver**: See everything in dark dungeons (Press X)
+4. Click "Use This Preset" to activate
+5. Return to game and press the hotkey!
 
 ## Usage
 
@@ -77,12 +113,32 @@ The mod comes with two pre-configured profiles:
    - **Radius**: Detection range in game units
    - **Filters**: Select which object types to highlight
 
+### Understanding the Display
+
+When you activate highlighting:
+- **Labels appear in Morrowind's native tooltip style** - dark background with yellowish text
+- **Thin lines connect labels to objects** when labels need to move to avoid overlap
+- **Important objects (NPCs) get priority** for the best label positions
+- **Every object gets its own label** - no confusing "5 items" groups
+
+The system intelligently spreads labels out so they don't overlap, while maintaining clear visual connections to their objects.
+
+### Performance Settings
+
+The **Performance** tab offers:
+- Quick presets: Potato, Balanced, or Ultra
+- Max labels limit (5-50)
+- Occlusion quality (hide labels behind walls)
+- Update rate control
+
 ### Tips
 
-- Use smaller radius values in crowded areas to avoid label clutter
-- Create specialized profiles for different situations (e.g., "Alchemy Ingredients" for ingredient hunting)
-- Combine with OpenMW's view distance settings for best performance
-- Labels automatically hide when objects are behind the camera or off-screen
+- **Can't see what a label points to?** Follow the thin connecting line to the object
+- **Too many labels?** Reduce your detection radius or filter object types
+- **Performance issues?** Use the "Potato" preset or disable occlusion checking
+- **Finding specific items?** Create custom profiles for different scenarios
+- **Dense loot pile?** Labels automatically spread out with lines showing what's what
+- Labels automatically hide when objects are behind walls (with occlusion enabled)
 
 ## Performance
 
