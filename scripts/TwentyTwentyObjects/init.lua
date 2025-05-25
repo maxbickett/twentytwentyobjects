@@ -2,7 +2,6 @@
 -- Handles hotkey detection and profile management
 
 local world = require('openmw.world')
-local input = require('openmw.input')
 local async = require('openmw.async')
 
 -- Import our utility modules
