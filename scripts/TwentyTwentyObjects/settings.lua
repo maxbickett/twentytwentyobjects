@@ -4,6 +4,8 @@
 local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
 local async = require('openmw.async')
+local input = require('openmw.input')
+local world = require('openmw.world')
 
 -- Import utilities
 local storage = require('scripts.TwentyTwentyObjects.util.storage')
@@ -470,21 +472,57 @@ I.TwentyTwentyObjects = {
     end
 }
 
--- Handle keypress for hotkey binding
+-- Helper: Check if a key event matches a profile's hotkey
+local function isProfileHotkey(profile, key)
+    return (key.symbol == profile.key and
+            key.withShift == profile.shift and
+            key.withCtrl == profile.ctrl and
+            key.withAlt == profile.alt)
+end
+
+-- Helper: Send event to global script
+local function sendToGlobal(event, data)
+    world.sendGlobalEvent('TTO_' .. event, data or {})
+end
+
+-- Engine handler: Key press
 local function onKeyPress(key)
-    if awaitingKeypress and settingsPage then
-        local profile = profiles[selectedProfileIndex]
-        if profile then
-            profile.key = key.symbol
-            profile.shift = key.withShift
-            profile.ctrl = key.withCtrl
-            profile.alt = key.withAlt
-            saveProfiles()
-            awaitingKeypress = false
-            I.TwentyTwentyObjects.refreshUI()
+    -- Check all profiles for matching hotkey
+    for index, profile in ipairs(profiles) do
+        if isProfileHotkey(profile, key) then
+            logger.info(string.format('Hotkey pressed for profile: %s', profile.name))
+            
+            if profile.modeToggle then
+                -- Toggle mode
+                sendToGlobal('ShowHighlights', { profile = profile, profileIndex = index })
+            else
+                -- Momentary mode (hold-to-show)
+                sendToGlobal('ShowHighlights', { profile = profile, profileIndex = index })
+            end
+            
+            return  -- Only one profile can match
         end
     end
 end
+
+-- Engine handler: Key release
+local function onKeyRelease(key)
+    -- Check all profiles for matching hotkey
+    for index, profile in ipairs(profiles) do
+        if not profile.modeToggle and isProfileHotkey(profile, key) then
+            -- Only hide for non-toggle (momentary) profiles
+            sendToGlobal('HideHighlights', {})
+            return
+        end
+    end
+end
+
+-- Subscribe to storage changes to keep profiles synced
+storage.subscribe(async:callback(function(section, key)
+    if key == 'profiles' or key == nil then
+        profiles = storage.getProfiles()
+    end
+end))
 
 -- Initialize on load
 local function onInit()
@@ -509,6 +547,7 @@ return {
     interface = I.TwentyTwentyObjects,
     engineHandlers = {
         onInit = onInit,
-        onKeyPress = onKeyPress
+        onKeyPress = onKeyPress,
+        onKeyRelease = onKeyRelease
     }
 }

@@ -29,13 +29,26 @@ end
 
 -- Check if profiles exist
 function M.hasProfiles()
-    local profiles = modConfig:get('profiles')
-    return profiles ~= nil and #profiles > 0
+    local profiles = M.getProfiles() -- This will always return a table (and fixes storage if needed)
+    return #profiles > 0
 end
 
 -- Get all profiles
 function M.getProfiles()
-    return modConfig:get('profiles') or {}
+    local profilesData = modConfig:get('profiles')
+    if type(profilesData) == 'table' then
+        return profilesData
+    else
+        -- If profilesData is nil or not a table, initialize/correct it in storage
+        if profilesData ~= nil then
+            print('[TTO Storage WARN] Profiles data in storage was not a table (type: ' .. type(profilesData) .. '). Resetting to empty table.')
+        else
+            print('[TTO Storage INFO] Profiles not found in storage. Initializing with an empty table.')
+        end
+        local newProfiles = {}
+        modConfig:set('profiles', newProfiles) -- Correct the storage
+        return newProfiles
+    end
 end
 
 -- Set all profiles

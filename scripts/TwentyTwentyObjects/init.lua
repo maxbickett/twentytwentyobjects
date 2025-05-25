@@ -1,5 +1,5 @@
 -- init.lua: Global script for Twenty Twenty Objects Mod
--- Handles hotkey detection and profile management
+-- Handles profile management and player events
 
 local world = require('openmw.world')
 local async = require('openmw.async')
@@ -13,92 +13,86 @@ logger.init(storage)
 storage.initializeDefaults()
 
 -- Load profiles from storage
-local profiles = storage.getProfiles()
+-- Note: 'profiles' here is for reference if needed, but primary hotkey matching happens in settings.lua
+local profiles = storage.getProfiles() 
 
--- Track active profile for toggle mode
+-- Track active profile
 local activeProfileIndex = nil
-local momentaryProfileIndex = nil  -- Track hold-to-show profile
 
--- Subscribe to storage changes to keep profiles synced
+-- Subscribe to storage changes to keep profiles synced (e.g., if profile details change)
 storage.subscribe(async:callback(function(section, key)
     if key == 'profiles' or key == nil then
-        profiles = storage.getProfiles()
-        logger.debug('Profiles updated from storage')
-        logger.table('Updated profiles', profiles)
+        profiles = storage.getProfiles() -- Keep this global 'profiles' copy updated
+        logger.debug('Profiles updated in global script from storage')
+        -- If the currently active profile's definition changed, we might need to refresh,
+        -- but for now, we assume player script handles display based on profile data it receives.
     end
 end))
-
--- Helper: Check if a key event matches a profile's hotkey
-local function isProfileHotkey(profile, key)
-    return (key.symbol == profile.key and
-            key.withShift == profile.shift and
-            key.withCtrl == profile.ctrl and
-            key.withAlt == profile.alt)
-end
 
 -- Helper: Send event to player
 local function sendToPlayer(event, data)
     local player = world.players[1]
     if player then
         player:sendEvent('TTO_' .. event, data)
-        logger.debug(string.format('Sent event %s to player', event))
+        logger.debug(string.format('Sent event %s to player with data: %s', event, tostring(data)))
     else
         logger.error('No player found to send event')
     end
 end
 
--- Engine handler: Key press
-local function onKeyPress(key)
-    -- Check all profiles for matching hotkey
-    for index, profile in ipairs(profiles) do
-        if isProfileHotkey(profile, key) then
-            logger.info(string.format('Hotkey pressed for profile: %s', profile.name))
-            
-            if profile.modeToggle then
-                -- Toggle mode
-                if activeProfileIndex == index then
-                    -- Turn off active highlighting
-                    sendToPlayer('HideHighlights', {})
-                    activeProfileIndex = nil
-                    logger.debug('Toggle OFF')
-                else
-                    -- Turn off any existing highlighting first
-                    if activeProfileIndex then
-                        sendToPlayer('HideHighlights', {})
-                    end
-                    -- Activate this profile
-                    sendToPlayer('ShowHighlights', { profile = profile })
-                    activeProfileIndex = index
-                    logger.debug('Toggle ON')
-                end
-            else
-                -- Momentary mode (hold-to-show)
-                -- Turn off any toggle mode highlighting
-                if activeProfileIndex then
-                    sendToPlayer('HideHighlights', {})
-                    activeProfileIndex = nil
-                end
-                -- Show highlights for this profile
-                sendToPlayer('ShowHighlights', { profile = profile })
-                momentaryProfileIndex = index
-                logger.debug('Momentary ON')
+-- Event handler: Show highlights
+local function onShowHighlights(data)
+    local profile = data.profile
+    local profileIndex = data.profileIndex -- This is the index from the 'profiles' array in settings.lua
+
+    if not profile or profileIndex == nil then
+        logger.error("onShowHighlights called with invalid data. Profile: " .. tostring(profile) .. ", Index: " .. tostring(profileIndex))
+        return
+    end
+
+    if profile.modeToggle then -- This is a toggle-mode profile
+        if activeProfileIndex == profileIndex then
+            -- This toggle profile is already active, so turn it OFF
+            sendToPlayer('HideHighlights', {})
+            activeProfileIndex = nil
+            logger.debug('Toggle OFF for profile: ' .. profile.name)
+        else
+            -- A different profile is active, or no profile is active. Turn this one ON.
+            if activeProfileIndex then -- If something else was active, hide it first
+                sendToPlayer('HideHighlights', {})
             end
-            
-            return  -- Only one profile can match
+            sendToPlayer('ShowHighlights', { profile = profile })
+            activeProfileIndex = profileIndex
+            logger.debug('Toggle ON for profile: ' .. profile.name)
         end
+    else -- This is a momentary (hold-to-show) profile
+        -- If another profile is active (e.g., a toggled one), hide it first.
+        if activeProfileIndex then
+            sendToPlayer('HideHighlights', {})
+            -- activeProfileIndex will be updated below.
+        end
+        sendToPlayer('ShowHighlights', { profile = profile })
+        activeProfileIndex = profileIndex -- Track it as active
+        logger.debug('Momentary ON for profile: ' .. profile.name)
     end
 end
 
--- Engine handler: Key release
-local function onKeyRelease(key)
-    -- Check if this is a momentary profile being released
-    if momentaryProfileIndex then
-        local profile = profiles[momentaryProfileIndex]
-        if profile and not profile.modeToggle and isProfileHotkey(profile, key) then
-            logger.debug('Momentary OFF')
-            sendToPlayer('HideHighlights', {})
-            momentaryProfileIndex = nil
+-- Event handler: Hide highlights (typically for momentary release)
+local function onHideHighlights(data) -- data is currently empty from settings.lua
+    if activeProfileIndex then
+        -- Check if the profile to hide is indeed the active one.
+        -- For momentary, settings.lua just sends a generic HideHighlights.
+        -- We assume it corresponds to the currently active momentary highlight.
+        local profileToHideName = "Unknown"
+        if profiles[activeProfileIndex] then -- Try to get name for logging
+             profileToHideName = profiles[activeProfileIndex].name
         end
+
+        sendToPlayer('HideHighlights', {})
+        logger.debug('Highlights OFF, was active: ' .. profileToHideName .. ' (index ' .. tostring(activeProfileIndex) .. ')')
+        activeProfileIndex = nil
+    else
+        logger.debug('onHideHighlights called, but no profile was active.')
     end
 end
 
@@ -106,19 +100,20 @@ end
 local function onLoad()
     -- Reset active states on load
     activeProfileIndex = nil
-    momentaryProfileIndex = nil
-    logger.info('Twenty Twenty Objects mod loaded')
+    logger.info('Twenty Twenty Objects global script loaded and reset.')
     
-    -- Log initial profile count
-    logger.debug(string.format('Loaded %d profiles', #profiles))
+    -- Log initial profile count from storage
+    logger.debug(string.format('Loaded %d profiles (from storage in global init)', #storage.getProfiles()))
 end
 
 logger.info('Twenty Twenty Objects global script initialized')
 
 return {
     engineHandlers = {
-        onKeyPress = onKeyPress,
-        onKeyRelease = onKeyRelease,
         onLoad = onLoad
+    },
+    eventHandlers = {
+        TTO_ShowHighlights = onShowHighlights,
+        TTO_HideHighlights = onHideHighlights
     }
 }
