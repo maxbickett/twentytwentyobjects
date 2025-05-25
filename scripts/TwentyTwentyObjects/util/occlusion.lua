@@ -1,7 +1,6 @@
--- occlusion.lua: Raycasting utilities to hide labels behind walls
--- Critical for preventing immersion-breaking see-through-walls labels
+-- occlusion.lua: Simple occlusion utilities for player scripts
+-- Uses distance and door-based checks instead of raycasting (which requires openmw.world)
 
-local world = require('openmw.world')
 local util = require('openmw.util')
 local nearby = require('openmw.nearby')
 
@@ -11,7 +10,7 @@ local M = {}
 local occlusionCache = {}
 local cacheFrame = 0
 
--- Raycast from player to object to check for obstructions
+-- Simple visibility check using distance and doors
 function M.isObjectVisible(object, playerPos)
     -- Generate cache key
     local key = tostring(object)
@@ -21,27 +20,11 @@ function M.isObjectVisible(object, playerPos)
         return occlusionCache[key].visible
     end
     
-    -- Get object center position
-    local targetPos = object.position
-    local bbox = object:getBoundingBox()
-    if bbox then
-        -- Use center of bounding box
-        targetPos = object.position + util.vector3(0, 0, (bbox.max.z - bbox.min.z) / 2)
-    end
+    -- Default to visible
+    local visible = true
     
-    -- Cast ray from player eye level to object
-    local eyeOffset = util.vector3(0, 0, 60)  -- Approximate eye height
-    local rayStart = playerPos + eyeOffset
-    local rayEnd = targetPos
-    
-    -- Perform raycast
-    local hitResult = world.castRay(rayStart, rayEnd, {
-        ignore = {object},  -- Don't hit the target object itself
-        collisionType = world.COLLISION_TYPE.World  -- Check world geometry
-    })
-    
-    -- Object is visible if ray reaches it without hitting anything
-    local visible = (hitResult.hit == false)
+    -- Check if object is behind closed doors
+    visible = M.quickDoorCheck(object, playerPos)
     
     -- Cache result
     occlusionCache[key] = {
@@ -52,41 +35,12 @@ function M.isObjectVisible(object, playerPos)
     return visible
 end
 
--- Check multiple points on large objects for better accuracy
+-- Alias for compatibility
 function M.isLargeObjectVisible(object, playerPos)
-    local bbox = object:getBoundingBox()
-    if not bbox then
-        return M.isObjectVisible(object, playerPos)
-    end
-    
-    -- Check corners of bounding box
-    local testPoints = {
-        object.position + util.vector3(bbox.min.x, bbox.min.y, bbox.max.z),  -- Top corners
-        object.position + util.vector3(bbox.max.x, bbox.min.y, bbox.max.z),
-        object.position + util.vector3(bbox.min.x, bbox.max.y, bbox.max.z),
-        object.position + util.vector3(bbox.max.x, bbox.max.y, bbox.max.z),
-        object.position + util.vector3(0, 0, bbox.max.z)  -- Top center
-    }
-    
-    -- Object is visible if ANY test point is visible
-    for _, point in ipairs(testPoints) do
-        local eyeOffset = util.vector3(0, 0, 60)
-        local rayStart = playerPos + eyeOffset
-        
-        local hitResult = world.castRay(rayStart, point, {
-            ignore = {object},
-            collisionType = world.COLLISION_TYPE.World
-        })
-        
-        if not hitResult.hit then
-            return true  -- At least one point is visible
-        end
-    end
-    
-    return false
+    return M.isObjectVisible(object, playerPos)
 end
 
--- Fast approximate check using nearby doors
+-- Check using nearby doors (player script compatible)
 function M.quickDoorCheck(object, playerPos)
     -- If object is behind a closed door, it's probably not visible
     for _, door in ipairs(nearby.doors) do
@@ -122,9 +76,7 @@ end
 
 -- Get occlusion method based on performance setting
 function M.getOcclusionMethod(quality)
-    if quality == "high" then
-        return M.isLargeObjectVisible
-    elseif quality == "medium" then
+    if quality == "high" or quality == "medium" then
         return M.isObjectVisible
     elseif quality == "low" then
         return M.quickDoorCheck
