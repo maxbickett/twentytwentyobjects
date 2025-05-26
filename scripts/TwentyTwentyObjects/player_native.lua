@@ -165,6 +165,8 @@ local function scanAndCreateLabels(profile)
                                 worldPos = worldPos,
                                 screenPos = screenPos
                             })
+                            logger_module.debug(string.format('Added candidate: %s at screen pos (%.1f, %.1f)', 
+                                getObjectName(obj), screenPos.x, screenPos.y))
                         end
                     end
                 end

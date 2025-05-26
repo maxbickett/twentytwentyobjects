@@ -22,8 +22,22 @@ end
 
 -- Check if object is occluded using raycasting
 local function checkOcclusionRaycast(object, playerPos)
-    -- Get object center position (add some height to avoid ground collision)
-    local objectPos = object.position + util.vector3(0, 0, 50)
+    -- Determine offset based on object type
+    local types = require('openmw.types')
+    local offset = 50  -- Default offset
+    
+    -- Use smaller offset for items that might be on surfaces
+    if object.type == types.Weapon or object.type == types.Armor or 
+       object.type == types.Clothing or object.type == types.Book or 
+       object.type == types.Ingredient or object.type == types.Miscellaneous or
+       object.type == types.Gold then
+        offset = 10  -- Small offset for items
+    elseif object.type == types.Container then
+        offset = 30  -- Medium offset for containers
+    end
+    
+    -- Get object center position with appropriate offset
+    local objectPos = object.position + util.vector3(0, 0, offset)
     
     -- Cast ray from player to object
     local result = nearby.castRay(playerPos, objectPos, {
@@ -31,8 +45,15 @@ local function checkOcclusionRaycast(object, playerPos)
         collisionType = nearby.COLLISION_TYPE.World + nearby.COLLISION_TYPE.Door  -- Check walls and doors
     })
     
-    -- If we hit something and it's not our target object, it's occluded
+    -- If we hit something and it's not our target object
     if result.hit and result.hitObject ~= object then
+        -- Check if the hit object is very close to our target (likely a surface the item is on)
+        local hitDistance = (result.hitPos - object.position):length()
+        if hitDistance < 100 then  -- Within 100 units, probably on a surface
+            -- This is likely an item on a table/shelf, consider it visible
+            return true
+        end
+        
         logger.debug(string.format('Object %s occluded by %s', 
             object.recordId or 'unknown', 
             result.hitObject and result.hitObject.recordId or 'terrain'))

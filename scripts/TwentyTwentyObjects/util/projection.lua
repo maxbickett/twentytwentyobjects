@@ -19,78 +19,34 @@ function M.updateScreenSize()
     logger.debug(string.format('Screen size updated: %dx%d', screenSize.x, screenSize.y))
 end
 
--- Check if object is in camera's field of view
-local function isInFieldOfView(worldPos)
+-- Convert world position to screen coordinates
+-- Returns vector2 or nil if position is behind camera
+function M.worldToScreen(worldPos)
+    -- First do a simple check if object is behind camera
+    -- This prevents objects behind us from being projected to screen coordinates in front
     local camPos = camera.getPosition()
     local toObject = worldPos - camPos
     
-    -- Get camera's view transform to extract forward direction
-    local viewTransform = camera.getViewTransform()
-    
-    -- In OpenMW, we can derive the forward direction from the view transform
-    -- The view transform converts world to camera space
-    -- We need to transform a forward vector from camera space to world space
-    -- In camera space, forward is typically (0, 0, -1)
-    local camSpaceForward = util.vector3(0, 0, -1)
-    
-    -- To get world space forward, we need the inverse of the view transform
-    -- Since we're dealing with rotation only, we can use the transpose
-    -- But let's use a simpler approach: calculate from camera angles
+    -- Get camera forward direction from yaw and pitch
     local yaw = camera.getYaw() + camera.getExtraYaw()
     local pitch = camera.getPitch() + camera.getExtraPitch()
     
-    -- Calculate forward vector from yaw and pitch
-    -- In OpenMW, yaw 0 points north (positive Y), and increases clockwise
+    -- Calculate forward vector
     local camForward = util.vector3(
         math.sin(yaw) * math.cos(pitch),
         math.cos(yaw) * math.cos(pitch),
         math.sin(pitch)
     )
     
-    -- Calculate dot product to check if object is in front
+    -- Check if object is in front hemisphere (dot product > 0)
     local dot = toObject:dot(camForward)
-    
-    -- If dot product is negative or very small, object is behind camera
     if dot <= 0 then
-        logger.debug(string.format('Object behind camera: dot=%.2f', dot))
-        return false
-    end
-    
-    -- Check horizontal field of view
-    -- Get the angle between the forward vector and the vector to the object
-    local distance = toObject:length()
-    if distance > 0 then
-        local cosAngle = dot / distance  -- dot / (|toObject| * |camForward|), but |camForward| = 1
-        local angle = math.acos(math.min(1, math.max(-1, cosAngle)))
-        local fovRad = camera.getFieldOfView()
-        
-        -- Add some margin to account for screen aspect ratio and edge cases
-        local maxAngle = fovRad * 0.8  -- 80% of FOV to be conservative
-        
-        if angle > maxAngle then
-            logger.debug(string.format('Object outside FOV: angle=%.2f, maxAngle=%.2f', 
-                math.deg(angle), math.deg(maxAngle)))
-            return false
-        end
-    end
-    
-    return true
-end
-
--- Convert world position to screen coordinates
--- Returns vector2 or nil if position is behind camera
-function M.worldToScreen(worldPos)
-    -- First check if object is in field of view
-    if not isInFieldOfView(worldPos) then
+        -- Object is behind camera
         return nil
     end
     
     -- Use OpenMW's camera projection function
     local viewportPos = camera.worldToViewportVector(worldPos)
-    
-    -- Debug logging
-    logger.debug(string.format('worldToScreen: pos=%s, viewport=%s (z=%.2f)', 
-        tostring(worldPos), tostring(viewportPos), viewportPos.z))
     
     -- The z component is the distance from camera to object
     -- If it's negative or very small, the object is behind or at the camera
@@ -104,16 +60,22 @@ function M.worldToScreen(worldPos)
         M.updateScreenSize()
     end
     
-    -- Convert viewport coordinates to screen coordinates
+    -- The viewport coordinates are already in screen pixels
     local screenX = viewportPos.x
     local screenY = viewportPos.y
     
     -- Create screen position vector
     local screenPos = util.vector2(screenX, screenY)
     
-    -- Additional bounds checking with reasonable margins
-    if not M.isOnScreen(screenPos, 100) then
-        logger.debug(string.format('Object outside screen bounds: (%.1f, %.1f)', screenX, screenY))
+    -- Be more lenient with bounds checking - objects slightly off-screen might still have visible labels
+    local margin = 200  -- Increased margin
+    if not M.isOnScreen(screenPos, margin) then
+        -- Only log for extreme cases to reduce spam
+        if math.abs(screenX) > 5000 or math.abs(screenY) > 5000 then
+            logger.debug(string.format('worldToScreen: pos=%s, viewport=%s (z=%.2f)', 
+                tostring(worldPos), tostring(viewportPos), viewportPos.z))
+            logger.debug(string.format('Object far outside screen bounds: (%.1f, %.1f)', screenX, screenY))
+        end
         return nil
     end
     
@@ -147,7 +109,7 @@ function M.getObjectLabelPosition(object)
         if object.type then
             local types = require('openmw.types')
             if object.type == types.NPC or object.type == types.Creature then
-                offset = 50  -- Half height for actors
+                offset = 100  -- Head height for actors (was 50)
             elseif object.type == types.Container then
                 offset = 0   -- Use center for containers
             elseif object.type == types.Door then
