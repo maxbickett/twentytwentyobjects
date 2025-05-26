@@ -518,12 +518,13 @@ end
 
 -- Initialize on load
 local function onInit()
-    -- Initialize logger (now safe as storage is active)
-    generalSettings = storage_module.get('general', { debug = false })
-    logger_module.init(storage_module, generalSettings.debug) -- Pass debug state if logger supports it
+    -- local engine_storage = require('openmw.storage') -- No longer needed here
+    -- storage_module.init(engine_storage) -- No longer needed here
 
-    -- Load profiles from storage (now safe)
-    profiles = storage_module.getProfiles() -- Ensures a table
+    generalSettings = storage_module.get('general', { debug = false })
+    logger_module.init(storage_module, generalSettings.debug)
+
+    profiles = storage_module.getProfiles()
 
     -- If profiles was empty (e.g. first run or reset), create default set
     if #profiles == 0 then

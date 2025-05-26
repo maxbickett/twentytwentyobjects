@@ -307,11 +307,12 @@ end
 
 -- Engine handler: Load
 local function onLoad()
-    -- Initialize logger (now safe as storage is active)
+    -- local engine_storage = require('openmw.storage') -- No longer needed here
+    -- storage_module.init(engine_storage) -- No longer needed here
+
     generalSettings = storage_module.get('general', { debug = false })
     logger_module.init(storage_module, generalSettings.debug)
 
-    -- Update screen size cache
     projection.updateScreenSize()
     logger_module.debug('Player script loaded')
 end

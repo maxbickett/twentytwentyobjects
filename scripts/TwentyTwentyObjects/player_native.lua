@@ -453,12 +453,13 @@ local function onUpdate(dt)
 end
 
 local function onLoad()
-    -- Initialize logger (now safe as storage is active)
+    -- local engine_storage = require('openmw.storage') -- No longer needed here
+    -- storage_module.init(engine_storage) -- No longer needed here
+
     generalSettings = storage_module.get('general', { debug = false })
     logger_module.init(storage_module, generalSettings.debug)
     
-    labelRenderer.init() -- Assuming this is safe here, or if it uses storage, it's now fine.
-
+    labelRenderer.init()
     projection.updateScreenSize()
     logger_module.debug('Native player script loaded')
 end

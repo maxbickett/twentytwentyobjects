@@ -5,10 +5,14 @@ local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
 local async = require('openmw.async')
 local input = require('openmw.input') -- For key press handling WITHIN THE MENU (e.g. binding)
+local util = require('openmw_aux.util') -- Added for util.map and helpers
 -- local world = require('openmw.world') -- REMOVED: Not available in MENU context
 
-local storage_module = require('scripts.TwentyTwentyObjects.util.storage')
 local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
+-- storage_module will be required later when data push comes from Global
+
+local auxUtil = require('openmw_aux.util')
+local map = auxUtil.map
 
 -- Forward declare variables that will be initialized in onInit
 local profiles = {}
@@ -93,8 +97,6 @@ local TABS = {
     {id = "performance", label = "Performance", icon = "⚙️"},
     {id = "help", label = "Help", icon = "❓"}
 }
-
-logger.init(storage)
 
 -- Helper: Save current profiles to storage
 local function saveProfiles()
@@ -283,7 +285,7 @@ local function createTabContent()
                         arrange = ui.ALIGNMENT.Start
                     },
                     content = ui.content(
-                        util.map(PRESETS, createPresetCard)
+                        map(PRESETS, createPresetCard)
                     )
                 }
             })
@@ -747,7 +749,7 @@ end
 local function createAppearanceSettings()
     -- Ensure appearanceSettings is populated
     if not appearanceSettings.labelStyle then
-        appearanceSettings = storage_module.get('appearance', { -- Default values if not found
+        appearanceSettings = { -- Default values if not found
             labelStyle = "native",
             textSize = "medium",
             lineStyle = "straight",
@@ -756,7 +758,7 @@ local function createAppearanceSettings()
             showIcons = true,
             enableAnimations = true,
             animationSpeed = "normal"
-        })
+        }
     end
 
     return {
@@ -883,14 +885,14 @@ end
 -- Create performance settings
 local function createPerformanceSettings()
     if not performanceSettings.maxLabels then
-         performanceSettings = storage_module.get('performance', { -- Default values
+         performanceSettings = { -- Default values
             maxLabels = 20,
             updateInterval = "medium", -- e.g., 0.05s
             scanInterval = "medium",   -- e.g., 0.25s
             distanceCulling = true,
             cullDistance = 2000,
             occlusionChecks = "basic" -- none, basic, advanced (raycast)
-        })
+        }
     end
     return {
         type = ui.TYPE.Flex,
@@ -1062,7 +1064,7 @@ local function createMainLayout()
                     margin = {bottom = 20}
                 },
                 content = ui.content(
-                    util.map(TABS, function(tab)
+                    map(TABS, function(tab)
                         return createTabButton(tab, currentTab == tab.id)
                     end)
                 )
@@ -1082,62 +1084,47 @@ local function createMainLayout()
     }
 end
 
--- Interface
-I.TwentyTwentyObjects = {
-    refreshUI = function()
-        if settingsPage then
-            settingsPage.element.layout = createMainLayout()
-            settingsPage.element:update()
-        end
+-- Local function for the interface
+local function exposed_refreshUI() 
+    if settingsPage then
+        settingsPage.element.layout = createMainLayout()
+        settingsPage.element:update()
     end
-}
+end
 
 -- Initialize
 local function onInit()
-    -- Initialize logger (now safe as storage is active)
-    generalSettings = storage_module.get('general', { debug = false })
-    logger_module.init(storage_module, generalSettings.debug)
-
-    -- Load profiles and other settings from storage (now safe)
-    profiles = storage_module.getProfiles() -- Ensures a table
-    if #profiles == 0 then -- If storage was empty or reset, initialize with a default if desired
-        logger_module.info("No profiles found in storage. Consider adding a default or guiding user.")
-        -- Example: Add a default starter profile if none exist.
-        -- table.insert(profiles, { name = "Default Starter", key = 'h', ... etc ... })
-        -- saveProfiles() -- Don't forget to save if you add one
-    end
-
-    appearanceSettings = storage_module.get('appearance', {
-        labelStyle = "native", textSize = "medium", lineColor = {r=0.8, g=0.8, b=0.8, a=0.7},
-        backgroundColor = {r=0, g=0, b=0, a=0.5}, showIcons = true,
-        enableAnimations = true, animationSpeed = "normal"
-    })
-    performanceSettings = storage_module.get('performance', {
-        maxLabels = 20, updateInterval = "medium", scanInterval = "medium",
-        distanceCulling = true, cullDistance = 2000, occlusionChecks = "basic"
-    })
-    
-    -- Ensure selectedProfileIndex is valid
-    if selectedProfileIndex > #profiles and #profiles > 0 then
-        selectedProfileIndex = #profiles
-    elseif #profiles == 0 then
-        selectedProfileIndex = 1 -- Or handle no profiles state in UI
-    end
-
-    -- Register settings page
+    -- Placeholder settings page until data arrives from Global
     settingsPage = ui.registerSettingsPage({
         key = 'TwentyTwentyObjects',
         l10n = 'TwentyTwentyObjects',
         name = 'Interactable Highlight',
-        element = ui.create(createMainLayout())
+        element = ui.create({
+            type = ui.TYPE.Text,
+            props = { text = 'Loading settings...', textSize = 16 }
+        })
     })
-    
-    logger_module.info('Improved settings page registered')
+end
+
+-- function called from Global script once storage ready
+local function refresh(data)
+    if not data then return end
+    profiles           = data.profiles or {}
+    appearanceSettings = data.appearance or {}
+    performanceSettings= data.performance or {}
+    generalSettings    = data.general or {}
+    if settingsPage then
+        settingsPage.element.layout = createMainLayout()
+        settingsPage.element:update()
+    end
 end
 
 return {
-    interfaceName = 'TwentyTwentyObjects',
-    interface = I.TwentyTwentyObjects,
+    interfaceName = 'TTO_Menu',
+    interface = { 
+        refresh = refresh,
+        refreshUI = exposed_refreshUI
+    },
     engineHandlers = {
         onInit = onInit
     }
