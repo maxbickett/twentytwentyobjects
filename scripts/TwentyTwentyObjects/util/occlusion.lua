@@ -1,131 +1,80 @@
--- occlusion.lua: Simple occlusion utilities for player scripts
--- Uses distance and door-based checks instead of raycasting (which requires openmw.world)
+-- occlusion.lua: Occlusion detection utilities for Interactable Highlight mod
+-- Handles checking if objects are visible or hidden behind walls
 
-local util = require('openmw.util')
 local nearby = require('openmw.nearby')
-local camera = require('openmw.camera')
-local types = require('openmw.types')
+local util = require('openmw.util')
+local self = require('openmw.self')
 
 local M = {}
 
+-- Logger for debugging
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
+
 -- Cache for occlusion results (cleared each frame)
 local occlusionCache = {}
-local cacheFrame = 0
+local cacheFrame = -1
 
--- Helper function to normalize a vector
-local function normalizeVector(vec)
-    local len = vec:length()
-    if len > 0 then
-        return vec / len
-    else
-        return vec
-    end
+-- Clear cache for new frame
+function M.newFrame()
+    occlusionCache = {}
+    cacheFrame = cacheFrame + 1
 end
 
--- Simple visibility check using distance and doors
-function M.isObjectVisible(object, playerPos)
-    -- Generate cache key
-    local key = tostring(object)
+-- Check if object is occluded using raycasting
+local function checkOcclusionRaycast(object, playerPos)
+    -- Get object center position (add some height to avoid ground collision)
+    local objectPos = object.position + util.vector3(0, 0, 50)
     
-    -- Check cache first
-    if occlusionCache[key] and occlusionCache[key].frame == cacheFrame then
-        return occlusionCache[key].visible
-    end
+    -- Cast ray from player to object
+    local result = nearby.castRay(playerPos, objectPos, {
+        ignore = self,  -- Ignore the player
+        collisionType = nearby.COLLISION_TYPE.World + nearby.COLLISION_TYPE.Door  -- Check walls and doors
+    })
     
-    -- Default to visible
-    local visible = true
-    
-    -- Check if object is behind closed doors
-    visible = M.quickDoorCheck(object, playerPos)
-    
-    -- Cache result
-    occlusionCache[key] = {
-        frame = cacheFrame,
-        visible = visible
-    }
-    
-    return visible
-end
-
--- Alias for compatibility
-function M.isLargeObjectVisible(object, playerPos)
-    return M.isObjectVisible(object, playerPos)
-end
-
--- Check using nearby doors (player script compatible)
-function M.quickDoorCheck(object, playerPos)
-    -- Basic distance check first - objects too far away might not be visible
-    local objDist = (object.position - playerPos):length()
-    if objDist > 5000 then  -- Very far objects are likely not visible
+    -- If we hit something and it's not our target object, it's occluded
+    if result.hit and result.hitObject ~= object then
+        logger.debug(string.format('Object %s occluded by %s', 
+            object.recordId or 'unknown', 
+            result.hitObject and result.hitObject.recordId or 'terrain'))
         return false
     end
     
-    -- If object is behind a closed door, it's probably not visible
-    for _, door in ipairs(nearby.doors) do
-        if door.isClosed then
-            -- Check if door is between player and object
-            local doorDist = (door.position - playerPos):length()
-            
-            -- Door must be closer than object
-            if doorDist < objDist then
-                -- Get directions
-                local toObject = normalizeVector(object.position - playerPos)
-                local toDoor = normalizeVector(door.position - playerPos)
-                
-                -- Check alignment - door must be roughly in the same direction
-                local dot = toObject:dot(toDoor)
-                if dot > 0.85 then  -- Tighter angle check (about 30 degrees)
-                    -- Additional check: is the object close to the door?
-                    -- This helps with objects that are just behind doors
-                    local objectToDoor = (object.position - door.position):length()
-                    if objectToDoor < 300 then  -- Object is near the door
-                        return false
-                    end
-                end
-            end
-        end
-    end
-    
-    -- Check for walls/containers that might block view
-    -- This is a heuristic - large containers between player and object might block view
-    for _, container in ipairs(nearby.containers) do
-        local containerDist = (container.position - playerPos):length()
-        if containerDist < objDist then
-            local toObject = normalizeVector(object.position - playerPos)
-            local toContainer = normalizeVector(container.position - playerPos)
-            
-            local dot = toObject:dot(toContainer)
-            if dot > 0.9 then  -- Very tight angle
-                -- Check if it's a large container (by checking if it has collision)
-                local objectToContainer = (object.position - container.position):length()
-                if objectToContainer < 150 then
-                    return false
-                end
-            end
-        end
-    end
-    
+    -- Not occluded
     return true
 end
 
--- Update cache frame
-function M.newFrame()
-    cacheFrame = cacheFrame + 1
-    -- Clear cache periodically to prevent memory bloat
-    if cacheFrame % 100 == 0 then
-        occlusionCache = {}
+-- Simple occlusion check (always visible)
+local function checkOcclusionNone(object, playerPos)
+    return true
+end
+
+-- Get occlusion check method based on performance setting
+function M.getOcclusionMethod(setting)
+    if setting == "none" then
+        return checkOcclusionNone
+    else
+        -- Use raycast for all other settings (low, medium, high)
+        return checkOcclusionRaycast
     end
 end
 
--- Get occlusion method based on performance setting
-function M.getOcclusionMethod(quality)
-    if quality == "high" or quality == "medium" then
-        return M.isObjectVisible
-    elseif quality == "low" then
-        return M.quickDoorCheck
-    else
-        return function() return true end  -- No occlusion
+-- Check if object is visible (wrapper with caching)
+function M.isVisible(object, playerPos, performanceSetting)
+    local key = tostring(object)
+    
+    -- Check cache
+    if occlusionCache[key] ~= nil then
+        return occlusionCache[key]
     end
+    
+    -- Get appropriate check method
+    local checkMethod = M.getOcclusionMethod(performanceSetting or "medium")
+    
+    -- Perform check and cache result
+    local visible = checkMethod(object, playerPos)
+    occlusionCache[key] = visible
+    
+    return visible
 end
 
 return M

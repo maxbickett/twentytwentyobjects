@@ -60,7 +60,6 @@ local PRESETS = {
     {
         name = "Loot Hunter",
         description = "Highlights valuable items and containers",
-        icon = "🗡️",
         shows = "Items, Weapons, Armor, Containers",
         profile = {
             name = "Loot Hunter",
@@ -77,7 +76,6 @@ local PRESETS = {
     {
         name = "NPC Tracker", 
         description = "Find NPCs and creatures in towns or dungeons",
-        icon = "👥",
         shows = "NPCs only",
         profile = {
             name = "NPC Tracker",
@@ -90,7 +88,6 @@ local PRESETS = {
     {
         name = "Thief's Eye",
         description = "Spot valuable items in shops and homes",
-        icon = "💎",
         shows = "All valuable items",
         profile = {
             name = "Thief's Eye",
@@ -106,7 +103,6 @@ local PRESETS = {
     {
         name = "Dungeon Delver",
         description = "Everything useful in dark dungeons",
-        icon = "🏛️",
         shows = "NPCs, Creatures, Containers, Doors, Items",
         profile = {
             name = "Dungeon Delver",
@@ -124,11 +120,11 @@ local PRESETS = {
 
 -- Tab definitions
 local TABS = {
-    {id = "presets", label = "Quick Start", icon = "⚡"},
-    {id = "profiles", label = "My Profiles", icon = "📋"},
-    {id = "appearance", label = "Appearance", icon = "🎨"},
-    {id = "performance", label = "Performance", icon = "⚙️"},
-    {id = "help", label = "Help", icon = "❓"}
+    {id = "presets", label = "Quick Start"},
+    {id = "profiles", label = "My Profiles"},
+    {id = "appearance", label = "Appearance"},
+    {id = "performance", label = "Performance"},
+    {id = "help", label = "Help"}
 }
 
 -- Forward declare variables that will be initialized by the refresh event
@@ -163,7 +159,37 @@ local generalSettings = {
 local currentTab = "presets"  
 local selectedProfileIndex = 1
 local awaitingKeypress = false
--- local showingPreview = false -- Not currently used in the restored logic, can be added if needed
+local keyBindingProfileIndex = nil  -- Track which profile is being rebound
+local keyBindingOverlay = nil      -- Reference to overlay element
+
+-- Helper to check if a key is reserved
+local function isReservedKey(key)
+    local reserved = {
+        ["escape"] = true,
+        ["return"] = true,
+        ["enter"] = true,
+        ["tab"] = true,
+        ["f1"] = true,
+        ["f2"] = true,
+        ["f3"] = true,
+        ["f4"] = true,
+        ["f5"] = true,
+        ["f10"] = true,  -- Quick save/load
+        ["f11"] = true,
+        ["f12"] = true
+    }
+    return reserved[string.lower(key)] or false
+end
+
+-- Helper to format key combination for display
+local function formatKeyCombo(key, shift, ctrl, alt)
+    local parts = {}
+    if alt then table.insert(parts, "Alt") end
+    if ctrl then table.insert(parts, "Ctrl") end
+    if shift then table.insert(parts, "Shift") end
+    table.insert(parts, string.upper(key))
+    return table.concat(parts, " + ")
+end
 
 -- Root UI element of the settings page (assigned in onInit)
 local rootElement = nil
@@ -233,22 +259,19 @@ local function createTabButton(tab, isActive)
     return {
         type = ui.TYPE.Container,
         props = {
-            backgroundColor = isActive and TAB_ACTIVE_BG_COLOR or TAB_INACTIVE_BG_COLOR,
-            borderColor = isActive and {0.4, 0.5, 0.6, 1} or {0.2, 0.2, 0.2, 1},
-            borderSize = isActive and 2 or 1,
-            borderRadius = {4, 4, 0, 0}, -- Rounded top corners only
-            padding = {horizontal = 15, vertical = 8},
-            margin = {right = 2},
-            minWidth = 100
+            margin = {right = 8}, -- Space between tabs
+            autoSize = true
         },
         content = ui.content({
             {
                 type = ui.TYPE.Text,
                 props = {
-                    text = tab.icon .. " " .. tab.label,
+                    text = tab.label,
                     textSize = 16,
-                    textColor = isActive and TAB_ACTIVE_TEXT_COLOR or TAB_INACTIVE_TEXT_COLOR,
-                    textAlign = ui.ALIGNMENT.Center
+                    textColor = isActive and col(1, 0.95, 0.8) or col(0.7, 0.65, 0.5),
+                    textAlign = ui.ALIGNMENT.Center,
+                    backgroundColor = isActive and col(0.25, 0.22, 0.18, 1) or col(0.15, 0.13, 0.11, 1),
+                    padding = {horizontal = 25, vertical = 10}
                 }
             }
         }),
@@ -259,13 +282,17 @@ local function createTabButton(tab, isActive)
             end),
             mouseEnter = c(function(e)
                 if not isActive then
-                    e.target.props.backgroundColor = HOVER_BG_COLOR
+                    local textWidget = e.target.content[1]
+                    textWidget.props.backgroundColor = col(0.2, 0.18, 0.15, 1)
+                    textWidget.props.textColor = col(0.85, 0.8, 0.65)
                     e.target:update()
                 end
             end),
             mouseLeave = c(function(e)
                 if not isActive then
-                    e.target.props.backgroundColor = TAB_INACTIVE_BG_COLOR
+                    local textWidget = e.target.content[1]
+                    textWidget.props.backgroundColor = col(0.15, 0.13, 0.11, 1)
+                    textWidget.props.textColor = col(0.7, 0.65, 0.5)
                     e.target:update()
                 end
             end)
@@ -279,8 +306,6 @@ local function createPresetCard(preset)
         type = ui.TYPE.Container,
         props = {
             backgroundColor = {0.1, 0.1, 0.1, 0.8},
-            borderColor = {0.3, 0.3, 0.3, 1},
-            borderSize = 2,
             padding = 15,
             margin = {bottom = 8},
             minWidth = 250,
@@ -314,14 +339,13 @@ local function createPresetCard(preset)
                         }
                     },
                     {
-                        type = ui.TYPE.Container,
-                        props = {
-                            backgroundColor = {0.2, 0.2, 0.2, 0.5},
-                            padding = 10,
-                            borderRadius = 4,
-                            margin = {bottom = 10},
-                            autoSize = true
-                        },
+                                        type = ui.TYPE.Container,
+                props = {
+                    backgroundColor = {0.2, 0.2, 0.2, 0.5},
+                    padding = 10,
+                    margin = {bottom = 10},
+                    autoSize = true
+                },
                         content = ui.content({
                             {
                                 type = ui.TYPE.Text,
@@ -338,7 +362,6 @@ local function createPresetCard(preset)
                         props = {
                             backgroundColor = {0.2, 0.3, 0.4, 1},
                             padding = {horizontal = 20, vertical = 10},
-                            borderRadius = 4,
                             autoSize = true
                         },
                         content = ui.content({
@@ -386,14 +409,11 @@ local function createKeyDisplay(profile)
     table.insert(keyParts, string.upper(profile.key))
     
     return {
-        type = ui.TYPE.Container,
-        props = {
-            backgroundColor = {0.2, 0.2, 0.2, 1},
-            borderColor = {0.4, 0.4, 0.4, 1},
-            borderSize = 2,
-            padding = 10,
-            borderRadius = 4
-        },
+                    type = ui.TYPE.Container,
+            props = {
+                backgroundColor = {0.2, 0.2, 0.2, 1},
+                padding = 10
+            },
         content = ui.content({
             {
                 type = ui.TYPE.Text,
@@ -501,15 +521,82 @@ createSettingsSection = function(profile)
             maxWidth = 600  -- Prevent content from stretching too wide
         },
         content = ui.content({
+            -- Profile name and controls
+            {
+                type = ui.TYPE.Container,
+                props = {
+                    backgroundColor = {0.1, 0.1, 0.1, 0.8},
+                    padding = 15,
+                    margin = {bottom = 10}
+                },
+                content = ui.content({
+                    {
+                        type = ui.TYPE.Flex,
+                        props = {
+                            horizontal = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "Profile: " .. (profile.name or "Unnamed"),
+                                    textSize = 18,
+                                    textColor = HEADER_TEXT_COLOR,
+                                    minWidth = 200
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Widget,
+                                props = {
+                                    relativeSize = v2(1, 0)  -- Spacer
+                                }
+                            },
+                            -- Delete button (only if more than one profile)
+                            #profiles > 1 and {
+                                                                        type = ui.TYPE.Container,
+                                        props = {
+                                            backgroundColor = col(0.5, 0.2, 0.2, 1),
+                                            padding = {horizontal = 15, vertical = 8}
+                                        },
+                                content = ui.content({
+                                    {
+                                        type = ui.TYPE.Text,
+                                        props = {
+                                            text = "Delete Profile",
+                                            textSize = 14,
+                                            textColor = TAB_ACTIVE_TEXT_COLOR
+                                        }
+                                    }
+                                }),
+                                events = {
+                                    mouseClick = c(function()
+                                        table.remove(profiles, selectedProfileIndex)
+                                        selectedProfileIndex = math.min(selectedProfileIndex, #profiles)
+                                        saveProfiles()
+                                        I.TwentyTwentyObjects.refreshUI()
+                                    end),
+                                    mouseEnter = c(function(e)
+                                        e.target.props.backgroundColor = col(0.7, 0.3, 0.3, 1)
+                                        e.target:update()
+                                    end),
+                                    mouseLeave = c(function(e)
+                                        e.target.props.backgroundColor = col(0.5, 0.2, 0.2, 1)
+                                        e.target:update()
+                                    end)
+                                }
+                            } or {}
+                        })
+                    }
+                })
+            },
             -- Hotkey display
             {
                 type = ui.TYPE.Container,
                 props = {
                     backgroundColor = {0.1, 0.1, 0.1, 0.8},
                     padding = 15,
-                    margin = {bottom = 10},
-                    borderColor = {0.4, 0.4, 0.4, 1},
-                    borderSize = 1
+                    margin = {bottom = 10}
                 },
                 content = ui.content({
                     {
@@ -546,8 +633,7 @@ createSettingsSection = function(profile)
                                         type = ui.TYPE.Container,
                                         props = {
                                             backgroundColor = {0.2, 0.2, 0.4, 1},
-                                            padding = {horizontal = 15, vertical = 8},
-                                            borderRadius = 4
+                                            padding = {horizontal = 15, vertical = 8}
                                         },
                                         content = ui.content({
                                             {
@@ -561,8 +647,14 @@ createSettingsSection = function(profile)
                                         }),
                                         events = {
                                             mouseClick = c(function()
-                                                -- TODO: Implement key binding
-                                                print("[TTO DEBUG] Key binding not yet implemented")
+                                                -- Start key binding mode
+                                                print("[TTO DEBUG] Change Key clicked!")
+                                                awaitingKeypress = true
+                                                keyBindingProfileIndex = selectedProfileIndex
+                                                print("[TTO DEBUG] awaitingKeypress = " .. tostring(awaitingKeypress))
+                                                print("[TTO DEBUG] keyBindingProfileIndex = " .. tostring(keyBindingProfileIndex))
+                                                logger_module.debug("Starting key binding mode for profile " .. selectedProfileIndex)
+                                                I.TwentyTwentyObjects.refreshUI()
                                             end),
                                             mouseEnter = c(function(e)
                                                 e.target.props.backgroundColor = HOVER_BG_COLOR
@@ -653,125 +745,92 @@ createSettingsSection = function(profile)
     }
 end
 
--- Create visual toggle switch
+-- Create visual toggle using text
 createToggle = function(label, value, onChange)
+    return {
+        type = ui.TYPE.Text,
+        props = {
+            text = (value and "[X] " or "[ ] ") .. label,
+            textSize = 16,
+            textColor = CLICKABLE_TEXT_COLOR,
+            margin = {bottom = 10}
+        },
+        events = {
+            mouseClick = c(function()
+                onChange(not value)
+                I.TwentyTwentyObjects.refreshUI()
+            end),
+            mouseEnter = c(function(e)
+                e.target.props.textColor = col(0.9, 0.95, 1)
+                e.target:update()
+            end),
+            mouseLeave = c(function(e)
+                e.target.props.textColor = CLICKABLE_TEXT_COLOR
+                e.target:update()
+            end)
+        }
+    }
+end
+
+-- Create range slider using text buttons
+createRangeSlider = function(label, value, min, max, onChange)
+    -- Guard against nil value
+    if not value then value = min end
+    
     return {
         type = ui.TYPE.Flex,
         props = {
             horizontal = true,
             arrange = ui.ALIGNMENT.Start,
-            margin = {bottom = 10}
+            margin = {bottom = 15}
         },
         content = ui.content({
             {
                 type = ui.TYPE.Text,
                 props = {
                     text = label .. ": ",
-                    textSize = 14,
-                    minWidth = 150,
-                    textColor = DEFAULT_TEXT_COLOR
+                    textSize = 16,
+                    textColor = DEFAULT_TEXT_COLOR,
+                    minWidth = 200
                 }
             },
             {
-                type = ui.TYPE.Container,
+                type = ui.TYPE.Text,
                 props = {
-                    backgroundColor = value and {0.2, 0.4, 0.2, 1} or {0.3, 0.2, 0.2, 1},
-                    minWidth = 60,
-                    height = 25,
-                    borderRadius = 12,
-                    padding = 2
+                    text = "< ",
+                    textSize = 16,
+                    textColor = CLICKABLE_TEXT_COLOR
                 },
-                content = ui.content({
-                    {
-                        type = ui.TYPE.Container,
-                        props = {
-                            backgroundColor = {1, 1, 1, 1},
-                            width = 21,
-                            height = 21,
-                            borderRadius = 10,
-                            position = value and v2(37, 0) or v2(0, 0)
-                        }
-                    }
-                }),
                 events = {
                     mouseClick = c(function()
-                        onChange(not value)
+                        local step = (max - min) / 10
+                        local newValue = math.max(min, value - step)
+                        onChange(math.floor(newValue))
                         I.TwentyTwentyObjects.refreshUI()
                     end)
                 }
-            }
-        })
-    }
-end
-
--- Create range slider with visual feedback
-createRangeSlider = function(label, value, min, max, onChange)
-    -- Guard against nil value
-    if not value then value = min end
-    local percent = (value - min) / (max - min)
-    
-    return {
-        type = ui.TYPE.Flex,
-        props = {
-            vertical = true,
-            margin = {bottom = 15}
-        },
-        content = ui.content({
-            {
-                type = ui.TYPE.Flex,
-                props = {
-                    horizontal = true,
-                    arrange = ui.ALIGNMENT.Start
-                },
-                content = ui.content({
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = label,
-                            textSize = 14,
-                            textColor = DEFAULT_TEXT_COLOR
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Widget,
-                        props = {
-                            relativeSize = v2(1, 0)  -- Spacer that takes up remaining horizontal space
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = tostring(math.floor(value)) .. " units",
-                            textSize = 14,
-                            textColor = VALUE_TEXT_COLOR
-                        }
-                    }
-                })
             },
             {
-                type = ui.TYPE.Container,
+                type = ui.TYPE.Text,
                 props = {
-                    backgroundColor = {0.2, 0.2, 0.2, 1},
-                    height = 8,
-                    borderRadius = 4,
-                    margin = {top = 5}
+                    text = tostring(math.floor(value)),
+                    textSize = 16,
+                    textColor = VALUE_TEXT_COLOR,
+                    minWidth = 60,
+                    textAlign = ui.ALIGNMENT.Center
+                }
+            },
+            {
+                type = ui.TYPE.Text,
+                props = {
+                    text = " >",
+                    textSize = 16,
+                    textColor = CLICKABLE_TEXT_COLOR
                 },
-                content = ui.content({
-                    {
-                        type = ui.TYPE.Container,
-                        props = {
-                            backgroundColor = {0.4, 0.6, 0.8, 1},
-                            height = 8,
-                            width = percent * 300,  -- Assuming 300px width
-                            borderRadius = 4
-                        }
-                    }
-                }),
                 events = {
-                    mouseClick = c(function(e)
-                        -- Simple click position to value conversion
-                        local clickPercent = e.position.x / 300
-                        local newValue = min + (max - min) * clickPercent
+                    mouseClick = c(function()
+                        local step = (max - min) / 10
+                        local newValue = math.min(max, value + step)
                         onChange(math.floor(newValue))
                         I.TwentyTwentyObjects.refreshUI()
                     end)
@@ -807,7 +866,7 @@ createFilterCategories = function(filters)
                             {
                                 type = ui.TYPE.Text,
                                 props = {
-                                    text = "📍 Characters",
+                                    text = "Characters",
                                     textSize = 16,
                                     textColor = HEADER_TEXT_COLOR, -- Use header for category
                                     margin = {bottom = 5}
@@ -843,7 +902,7 @@ createFilterCategories = function(filters)
                             {
                                 type = ui.TYPE.Text,
                                 props = {
-                                    text = "🎒 Items",
+                                    text = "Items",
                                     textSize = 16,
                                     textColor = HEADER_TEXT_COLOR, -- Use header for category
                                     margin = {bottom = 5}
@@ -886,6 +945,21 @@ createFilterCategories = function(filters)
                                         filters.books = v
                                         if not v then filters.items = false end
                                         saveProfiles() -- Saves the entire 'profiles' table
+                                    end),
+                                    createCheckbox("Clothing", filters.clothing, function(v)
+                                        filters.clothing = v
+                                        if not v then filters.items = false end
+                                        saveProfiles() -- Saves the entire 'profiles' table
+                                    end),
+                                    createCheckbox("Ingredients", filters.ingredients, function(v)
+                                        filters.ingredients = v
+                                        if not v then filters.items = false end
+                                        saveProfiles() -- Saves the entire 'profiles' table
+                                    end),
+                                    createCheckbox("Misc", filters.misc, function(v)
+                                        filters.misc = v
+                                        if not v then filters.items = false end
+                                        saveProfiles() -- Saves the entire 'profiles' table
                                     end)
                                 })
                             }
@@ -908,7 +982,7 @@ createFilterCategories = function(filters)
                             {
                                 type = ui.TYPE.Text,
                                 props = {
-                                    text = "🏛️ World Objects",
+                                    text = "World Objects",
                                     textSize = 16,
                                     textColor = HEADER_TEXT_COLOR, -- Use header for category
                                     margin = {bottom = 5}
@@ -933,50 +1007,27 @@ end
 -- Create visual checkbox
 createCheckbox = function(label, checked, onChange)
     return {
-        type = ui.TYPE.Flex,
+        type = ui.TYPE.Text,
         props = {
-            horizontal = true,
-            arrange = ui.ALIGNMENT.Start,
+            text = (checked and "[X] " or "[ ] ") .. label,
+            textSize = 14,
+            textColor = CLICKABLE_TEXT_COLOR,
             margin = {bottom = 5}
         },
-        content = ui.content({
-            {
-                type = ui.TYPE.Container,
-                props = {
-                    backgroundColor = checked and col(0.2, 0.4, 0.2, 1) or col(0.2, 0.2, 0.2, 1),
-                    borderColor = col(0.4, 0.4, 0.4, 1),
-                    borderSize = 1,
-                    width = 18,
-                    height = 18,
-                    margin = {right = 8}
-                },
-                content = ui.content({
-                    checked and {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "✓",
-                            textSize = 14,
-                            textAlign = ui.ALIGNMENT.Center,
-                            textColor = TAB_ACTIVE_TEXT_COLOR -- White checkmark
-                        }
-                    } or {}
-                }),
-                events = {
-                    mouseClick = c(function()
-                        onChange(not checked)
-                        I.TwentyTwentyObjects.refreshUI()
-                    end)
-                }
-            },
-            {
-                type = ui.TYPE.Text,
-                props = {
-                    text = label,
-                    textSize = 14,
-                    textColor = DEFAULT_TEXT_COLOR
-                }
-            }
-        })
+        events = {
+            mouseClick = c(function()
+                onChange(not checked)
+                I.TwentyTwentyObjects.refreshUI()
+            end),
+            mouseEnter = c(function(e)
+                e.target.props.textColor = col(0.9, 0.95, 1)
+                e.target:update()
+            end),
+            mouseLeave = c(function(e)
+                e.target.props.textColor = CLICKABLE_TEXT_COLOR
+                e.target:update()
+            end)
+        }
     }
 end
 
@@ -1000,41 +1051,7 @@ createAppearanceSettings = function()
                 }
             },
             
-            -- Label style selector
-            {
-                type = ui.TYPE.Container,
-                props = {
-                    backgroundColor = {0.05, 0.05, 0.05, 0.5},
-                    padding = 15,
-                    margin = {bottom = 10}
-                },
-                content = ui.content({
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "Label Style",
-                            textSize = 16,
-                            margin = {bottom = 10},
-                            textColor = HEADER_TEXT_COLOR
-                        }
-                    },
-                    -- Style previews
-                    {
-                        type = ui.TYPE.Flex,
-                        props = {
-                            horizontal = true,
-                            arrange = ui.ALIGNMENT.Start
-                        },
-                        content = ui.content({
-                            createStylePreview("Outlined", "outlined", appearanceSettings.labelStyle == "outlined"),
-                            createStylePreview("Solid BG", "solid", appearanceSettings.labelStyle == "solid"),
-                            createStylePreview("Minimal", "minimal", appearanceSettings.labelStyle == "minimal")
-                        })
-                    }
-                })
-            },
-            
-            -- Other appearance options
+            -- Appearance options
             createToggle("Fade with distance", appearanceSettings.fadeDistance, function(v)
                 appearanceSettings.fadeDistance = v
                 saveAppearanceSettings()
@@ -1053,59 +1070,7 @@ createAppearanceSettings = function()
     }
 end
 
--- Create style preview card
-createStylePreview = function(name, style, isSelected)
-    return {
-        type = ui.TYPE.Container,
-        props = {
-            backgroundColor = isSelected and {0.2, 0.3, 0.4, 1} or {0.1, 0.1, 0.1, 1},
-            borderColor = isSelected and {0.4, 0.5, 0.6, 1} or {0.2, 0.2, 0.2, 1},
-            borderSize = 2,
-            padding = 10,
-            margin = 5,
-            minWidth = 100
-        },
-        content = ui.content({
-            -- Preview of the style
-            {
-                type = ui.TYPE.Container,
-                props = {
-                    margin = {bottom = 10},
-                    padding = 5,
-                    backgroundColor = style == "solid" and {0, 0, 0, 0.7} or {0, 0, 0, 0},
-                    borderColor = style == "outlined" and {0, 0, 0, 1} or {0, 0, 0, 0},
-                    borderSize = style == "outlined" and 2 or 0
-                },
-                content = ui.content({
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "Iron Sword",
-                            textSize = 14,
-                            textColor = col(1, 1, 1) -- White text for preview on various BGs
-                        }
-                    }
-                })
-            },
-            {
-                type = ui.TYPE.Text,
-                props = {
-                    text = name,
-                    textSize = 12,
-                    textAlign = ui.ALIGNMENT.Center,
-                    textColor = DEFAULT_TEXT_COLOR
-                }
-            }
-        }),
-        events = {
-            mouseClick = c(function()
-                appearanceSettings.labelStyle = style
-                saveAppearanceSettings()
-                I.TwentyTwentyObjects.refreshUI()
-            end)
-        }
-    }
-end
+
 
 -- Create performance settings
 createPerformanceSettings = function()
@@ -1113,15 +1078,13 @@ createPerformanceSettings = function()
     -- Helper function to create performance preset buttons
     local function createPerformancePreset(name, level, isSelected)
         return {
-            type = ui.TYPE.Container,
-            props = {
-                backgroundColor = isSelected and {0.2, 0.3, 0.4, 1} or {0.1, 0.1, 0.1, 1},
-                borderColor = isSelected and {0.4, 0.5, 0.6, 1} or {0.2, 0.2, 0.2, 1},
-                borderSize = 2,
-                padding = 10,
-                margin = 5,
-                minWidth = 80
-            },
+                    type = ui.TYPE.Container,
+        props = {
+            backgroundColor = isSelected and {0.2, 0.3, 0.4, 1} or {0.1, 0.1, 0.1, 1},
+            padding = 10,
+            margin = 5,
+            minWidth = 80
+        },
             content = ui.content({
                 {
                     type = ui.TYPE.Text,
@@ -1182,27 +1145,38 @@ createPerformanceSettings = function()
                 props = {
                     backgroundColor = {0.05, 0.05, 0.05, 0.5},
                     padding = 15,
-                    margin = {bottom = 10}
+                    margin = {bottom = 20},
+                    autoSize = true
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "Quick Settings",
-                            textSize = 16,
-                            margin = {bottom = 10},
-                            textColor = HEADER_TEXT_COLOR
-                        }
-                    },
-                    {
                         type = ui.TYPE.Flex,
                         props = {
-                            horizontal = true
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
                         },
                         content = ui.content({
-                            createPerformancePreset("Potato", "low", performanceSettings.updateInterval == "low"),
-                            createPerformancePreset("Balanced", "balanced", performanceSettings.updateInterval == "balanced"),
-                            createPerformancePreset("Ultra", "high", performanceSettings.updateInterval == "high")
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "Quick Settings",
+                                    textSize = 16,
+                                    margin = {bottom = 10},
+                                    textColor = HEADER_TEXT_COLOR
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Flex,
+                                props = {
+                                    horizontal = true,
+                                    arrange = ui.ALIGNMENT.Start
+                                },
+                                content = ui.content({
+                                    createPerformancePreset("Potato", "low", performanceSettings.updateInterval == "low"),
+                                    createPerformancePreset("Balanced", "balanced", performanceSettings.updateInterval == "balanced"),
+                                    createPerformancePreset("Ultra", "high", performanceSettings.updateInterval == "high")
+                                })
+                            }
                         })
                     }
                 })
@@ -1451,8 +1425,7 @@ createProfileList = function()
                 autoSize = true,
                 margin = {bottom = 4},
                 backgroundColor = (i == selectedProfileIndex) and TAB_ACTIVE_BG_COLOR or {0,0,0,0},
-                padding = 8,
-                borderRadius = 4
+                padding = 8
             },
             content = ui.content({
                 {
@@ -1478,8 +1451,6 @@ createProfileList = function()
         type = ui.TYPE.Container,
         props = {
             backgroundColor = {0.1, 0.2, 0.1, 0.8},
-            borderColor = {0.2, 0.4, 0.2, 1},
-            borderSize = 1,
             padding = 8,
             margin = {top = 10},
             autoSize = true
@@ -1517,12 +1488,10 @@ createProfileList = function()
             end),
             mouseEnter = c(function(e)
                 e.target.props.backgroundColor = {0.2, 0.3, 0.2, 1}
-                e.target.props.borderColor = {0.3, 0.5, 0.3, 1}
                 e.target:update()
             end),
             mouseLeave = c(function(e)
                 e.target.props.backgroundColor = {0.1, 0.2, 0.1, 0.8}
-                e.target.props.borderColor = {0.2, 0.4, 0.2, 1}
                 e.target:update()
             end)
         }
@@ -1539,10 +1508,94 @@ createProfileList = function()
     }
 end
 
+-- Helper: Create key binding overlay
+local function createKeyBindingOverlay()
+    return {
+        type = ui.TYPE.Container,
+        props = {
+            relativeSize = v2(1, 1),
+            anchor = v2(0, 0),
+            backgroundColor = col(0, 0, 0, 0.8), -- Dark semi-transparent background
+            visible = awaitingKeypress
+        },
+        content = ui.content({
+            {
+                type = ui.TYPE.Container,
+                props = {
+                    anchor = v2(0.5, 0.5),
+                    position = v2(-200, -100), -- Center the box
+                    size = v2(400, 200),
+                    backgroundColor = col(0.1, 0.1, 0.1, 1),
+                    padding = 20
+                },
+                content = ui.content({
+                    {
+                        type = ui.TYPE.Flex,
+                        props = {
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Center,
+                            relativeSize = v2(1, 1)
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "Press a key combination",
+                                    textSize = 20,
+                                    textColor = HEADER_TEXT_COLOR,
+                                    textAlign = ui.ALIGNMENT.Center,
+                                    margin = {bottom = 20}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "Hold Shift, Ctrl, or Alt for modifiers",
+                                    textSize = 14,
+                                    textColor = DEFAULT_TEXT_COLOR,
+                                    textAlign = ui.ALIGNMENT.Center,
+                                    margin = {bottom = 30}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Container,
+                                props = {
+                                    backgroundColor = col(0.4, 0.2, 0.2, 1),
+                                    padding = {horizontal = 20, vertical = 10},
+                                    autoSize = true,
+                                    anchor = v2(0.5, 0)
+                                },
+                                content = ui.content({
+                                    {
+                                        type = ui.TYPE.Text,
+                                        props = {
+                                            text = "Cancel (ESC)",
+                                            textSize = 14,
+                                            textColor = TAB_ACTIVE_TEXT_COLOR
+                                        }
+                                    }
+                                }),
+                                events = {
+                                    mouseClick = c(function()
+                                        awaitingKeypress = false
+                                        keyBindingProfileIndex = nil
+                                        I.TwentyTwentyObjects.refreshUI()
+                                    end)
+                                }
+                            }
+                        })
+                    }
+                })
+            }
+        })
+    }
+end
+
 -- Main layout
 local function createMainLayout()
     print("[TTO DEBUG SETTINGS_IMPROVED] createMainLayout() called.")
-    return {
+    
+    local mainContent = {
         type = ui.TYPE.Container,
         props = { relativeSize = v2(1,1), anchor = v2(0,0) },
         content = ui.content({
@@ -1554,29 +1607,31 @@ local function createMainLayout()
                     { 
                         type = ui.TYPE.Text, 
                         props = { 
-                            text = "🔍 Interactable Highlight Settings", 
+                            text = "TwentyTwentyObjects", 
                             textSize = 24, 
                             textAlign = ui.ALIGNMENT.Center,
-                            margin = {bottom = 10}
+                            margin = {bottom = 10},
+                            textColor = col(1, 1, 1)
                         } 
                     },
-                    -- Tab bar with proper container
+                    -- Tab bar like OpenMW
                     {
                         type = ui.TYPE.Container,
                         props = {
-                            backgroundColor = {0.05, 0.05, 0.05, 0.3},
-                            borderColor = {0.3, 0.3, 0.3, 1},
-                            borderSize = {0, 0, 2, 0}, -- Bottom border only
-                            margin = {bottom = 5}
+                            backgroundColor = col(0.08, 0.07, 0.06, 1), -- Darker background for tab bar
+                            padding = {horizontal = 10, vertical = 5},
+                            margin = {bottom = 15}
                         },
                         content = ui.content({
                             {
-                                type = ui.TYPE.Flex, 
-                                props = { 
+                                type = ui.TYPE.Flex,
+                                props = {
                                     horizontal = true,
                                     arrange = ui.ALIGNMENT.Start
-                                }, 
-                                content = ui.content(map(TABS or {}, function(tab) return createTabButton(tab, currentTab == tab.id) end))
+                                },
+                                content = ui.content(map(TABS or {}, function(tab) 
+                                    return createTabButton(tab, currentTab == tab.id) 
+                                end))
                             }
                         })
                     },
@@ -1604,6 +1659,20 @@ local function createMainLayout()
             }
         })
     }
+    
+    -- If we're in key binding mode, show the overlay on top
+    if awaitingKeypress then
+        return {
+            type = ui.TYPE.Container,
+            props = { relativeSize = v2(1,1), anchor = v2(0,0) },
+            content = ui.content({
+                mainContent,
+                createKeyBindingOverlay()
+            })
+        }
+    else
+        return mainContent
+    end
 end
 
 -- Local function for the interface
@@ -1643,6 +1712,58 @@ local function onInit()
         element = rootElement
     })
     print("[TTO DEBUG SETTINGS_IMPROVED] Settings page registered (Full UI).")
+end
+
+-- Handle key press events for key binding
+local function onKeyPress(key)
+    if not awaitingKeypress then return end
+    
+    -- Cancel on escape
+    if key.code == input.KEY.Escape then
+        awaitingKeypress = false
+        keyBindingProfileIndex = nil
+        I.TwentyTwentyObjects.refreshUI()
+        return
+    end
+    
+    -- Get the key name
+    local keyName = input.getKeyName(key.code)
+    if not keyName or keyName == "" then return end
+    
+    -- Check if it's a reserved key
+    if isReservedKey(keyName) then
+        logger_module.debug("Ignoring reserved key: " .. keyName)
+        return
+    end
+    
+    -- Check for modifier keys alone (we don't want to bind just "shift" etc)
+    local modifierKeys = {
+        [input.KEY.LeftShift] = true,
+        [input.KEY.RightShift] = true,
+        [input.KEY.LeftCtrl] = true,
+        [input.KEY.RightCtrl] = true,
+        [input.KEY.LeftAlt] = true,
+        [input.KEY.RightAlt] = true
+    }
+    if modifierKeys[key.code] then return end
+    
+    -- Update the profile with the new key binding
+    if keyBindingProfileIndex and profiles[keyBindingProfileIndex] then
+        local profile = profiles[keyBindingProfileIndex]
+        profile.key = string.lower(keyName)
+        profile.shift = key.withShift
+        profile.ctrl = key.withCtrl
+        profile.alt = key.withAlt
+        
+        logger_module.debug("Updated key binding for profile " .. keyBindingProfileIndex .. 
+                          " to: " .. formatKeyCombo(profile.key, profile.shift, profile.ctrl, profile.alt))
+        
+        -- Save and refresh
+        saveProfiles()
+        awaitingKeypress = false
+        keyBindingProfileIndex = nil
+        I.TwentyTwentyObjects.refreshUI()
+    end
 end
 
 -- function called from Global script once storage ready
@@ -1715,7 +1836,8 @@ return {
         refreshUI = exposed_refreshUI
     },
     engineHandlers = {
-        onInit = onInit
+        onInit = onInit,
+        onKeyPress = onKeyPress
     },
     eventHandlers = {
         PleaseRefreshSettingsEvent = handlePleaseRefreshSettingsEvent

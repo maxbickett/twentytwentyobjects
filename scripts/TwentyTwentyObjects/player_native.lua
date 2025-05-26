@@ -105,18 +105,26 @@ local function matchesFilters(object, filters)
     if objType == types.Door and filters.doors then return true end
     if objType == types.Activator and filters.activators then return true end
     
-    -- Items
+    -- Items - check specific subtypes first
+    if objType == types.Weapon and filters.weapons then return true end
+    if objType == types.Armor and filters.armor then return true end
+    if objType == types.Clothing and filters.clothing then return true end
+    if objType == types.Book and filters.books then return true end
+    if objType == types.Ingredient and filters.ingredients then return true end
+    if objType == types.Miscellaneous and filters.misc then return true end
+    if objType == types.Gold then return true end  -- Always show gold
+    
+    -- If none of the specific filters matched, check if it's an item and items filter is on
+    -- This acts as a catch-all for items without specific filters
     if filters.items then
-        return true  -- All items
-    else
-        -- Check specific subtypes
-        if objType == types.Weapon and filters.weapons then return true end
-        if objType == types.Armor and filters.armor then return true end
-        if objType == types.Clothing and filters.clothing then return true end
-        if objType == types.Book and filters.books then return true end
-        if objType == types.Ingredient and filters.ingredients then return true end
-        if objType == types.Miscellaneous and filters.misc then return true end
-        if objType == types.Gold then return true end  -- Always show gold
+        -- Only return true for item types that don't have their own filter
+        -- or if their specific filter is also enabled
+        if objType == types.Weapon or objType == types.Armor or 
+           objType == types.Clothing or objType == types.Book or 
+           objType == types.Miscellaneous then
+            return true
+        end
+        -- Don't include ingredients unless specifically enabled
     end
     
     return false
@@ -135,7 +143,6 @@ local function scanAndCreateLabels(profile)
     
     -- Get occlusion method based on performance settings
     local performance = storage_module.get('performance', {occlusion = "medium"})
-    local checkOcclusion = occlusion.getOcclusionMethod(performance.occlusion)
     
     -- Gather all nearby objects
     local function gatherObjects(objectList, typeFilter)
@@ -143,14 +150,22 @@ local function scanAndCreateLabels(profile)
             if matchesFilters(obj, profile.filters) then
                 local distSq = (obj.position - playerPos):length2()
                 if distSq <= radiusSq then
-                    -- Check if visible (not behind walls)
-                    if checkOcclusion(obj, playerPos) then
-                        local priority = spatial.calculatePriority(obj, playerPos)
-                        table.insert(candidates, {
-                            object = obj,
-                            distance = math.sqrt(distSq),
-                            priority = priority
-                        })
+                    -- Check if object is in front of camera first
+                    local worldPos = projection.getObjectLabelPosition(obj)
+                    local screenPos = projection.worldToScreen(worldPos)
+                    
+                    if screenPos then  -- worldToScreen returns nil if behind camera
+                        -- Now check occlusion
+                        if occlusion.isVisible(obj, playerPos, performance.occlusion) then
+                            local priority = spatial.calculatePriority(obj, playerPos)
+                            table.insert(candidates, {
+                                object = obj,
+                                distance = math.sqrt(distSq),
+                                priority = priority,
+                                worldPos = worldPos,
+                                screenPos = screenPos
+                            })
+                        end
                     end
                 end
             end
@@ -196,8 +211,9 @@ local function scanAndCreateLabels(profile)
     local labelDataList = {}
     
     for _, candidate in ipairs(toProcess) do
-        local worldPos = projection.getObjectLabelPosition(candidate.object)
-        local screenPos = projection.worldToScreen(worldPos)
+        -- We already have worldPos and screenPos from gathering phase
+        local screenPos = candidate.screenPos
+        local worldPos = candidate.worldPos
         
         logger_module.debug(string.format('Object at world pos: %s, screen pos: %s', tostring(worldPos), tostring(screenPos)))
         
@@ -253,12 +269,17 @@ local function scanAndCreateLabels(profile)
         -- Create connecting line if needed
         local line = nil
         if solution.showLine then
+            logger_module.debug(string.format('Creating line for %s: objectPos=%s, labelPos=%s', 
+                data.name, tostring(solution.objectPos), tostring(solution.labelPos)))
+            
             local lineStyle = labelLayout.getLineStyle(
                 solution.labelPos,
                 solution.objectPos,
                 false,  -- Not grouped for now
                 data.priority or 50  -- Default priority if missing
             )
+            
+            logger_module.debug(string.format('Line style: %s', lineStyle))
             
             if lineStyle == "solid" then
                 line = labelLayout.createConnectingLine(solution.objectPos, solution.labelPos)
@@ -267,6 +288,15 @@ local function scanAndCreateLabels(profile)
             elseif lineStyle == "curved" then
                 line = labelLayout.createCurvedLine(solution.objectPos, solution.labelPos, 15)
             end
+            
+            if line then
+                logger_module.debug('Line created successfully')
+            else
+                logger_module.debug('Line creation failed or returned nil')
+            end
+        else
+            logger_module.debug(string.format('No line for %s: distance=%.1f', 
+                data.name, (solution.labelPos - solution.objectPos):length()))
         end
         
         -- Store label data
@@ -451,16 +481,19 @@ end
 
 local function onHideHighlights(eventData)
     logger_module.info('onHideHighlights called')
-    -- Fade out all labels
-    for _, labelData in ipairs(activeLabels) do
-        labelData.targetAlpha = 0
-    end
+    -- Clear profile first to stop updates
     currentProfile = nil
+    -- Then clear all labels immediately
+    clearAllLabels()
 end
 
 -- Update loop
 local function onUpdate(dt)
     if not currentProfile then
+        -- Clean up any remaining labels when no profile is active
+        if #activeLabels > 0 then
+            clearAllLabels()
+        end
         return
     end
     

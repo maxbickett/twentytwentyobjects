@@ -29,14 +29,14 @@ local CONFIG = {
     
     -- Preferred label positions (relative to object)
     PREFERRED_POSITIONS = {
-        util.vector2(0, -30),    -- Above
-        util.vector2(40, -20),   -- Upper right
-        util.vector2(-40, -20),  -- Upper left
-        util.vector2(60, 0),     -- Right
-        util.vector2(-60, 0),    -- Left
-        util.vector2(40, 20),    -- Lower right
-        util.vector2(-40, 20),   -- Lower left
-        util.vector2(0, 30),     -- Below
+        util.vector2(0, -5),     -- Above (reduced to 5)
+        util.vector2(20, -5),    -- Upper right (reduced vertical to 5)
+        util.vector2(-20, -5),   -- Upper left (reduced vertical to 5)
+        util.vector2(25, 0),     -- Right
+        util.vector2(-25, 0),    -- Left
+        util.vector2(20, 5),     -- Lower right (reduced vertical to 5)
+        util.vector2(-20, 5),    -- Lower left (reduced vertical to 5)
+        util.vector2(0, 5),      -- Below (reduced to 5)
     },
     
     -- Line appearance
@@ -129,7 +129,7 @@ function JitterSolver:solve()
         table.insert(results, {
             labelPos = label.finalPos,
             objectPos = label.objectPos,
-            showLine = (label.finalPos - label.objectPos):length() > 40,  -- Show line if far from object
+            showLine = (label.finalPos - label.objectPos):length() > 20,  -- Show line if far from object
             data = label.data
         })
     end
@@ -350,8 +350,8 @@ end
 function M.getLineStyle(startPos, endPos, isGrouped, priority)
     local distance = (endPos - startPos):length()
     
-    if distance < 50 then
-        return "none"  -- Too close, no line needed
+    if distance < 20 then
+        return "none"  -- Too close, no line needed (matches showLine threshold)
     elseif isGrouped then
         return "curved"  -- Curved lines for grouped items
     elseif priority > 80 then
