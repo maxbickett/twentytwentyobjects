@@ -12,7 +12,7 @@ InteractableHighlight/
  ├─ scripts/
  │   ├─ init.lua              # GLOBAL – hotkeys, storage
  │   ├─ player.lua            # PLAYER – scans + HUD
- │   ├─ settings.lua          # MENU  – config UI
+ │   ├─ settings_improved.lua # MENU  – config UI
  │   └─ util/ or lib/ …       # helpers, shared code
  ├─ README.md                 # feature list, install, FAQ
  ├─ LICENSE                   # MIT / GPL-3 (match engine)
@@ -26,7 +26,7 @@ InteractableHighlight/
 ```
 GLOBAL: scripts/InteractableHighlight/init.lua
 PLAYER: scripts/InteractableHighlight/player.lua
-MENU:   scripts/InteractableHighlight/settings.lua
+MENU:   scripts/InteractableHighlight/settings_improved.lua
 ```
 
 OpenMW loads only what it needs; you avoid accidental heavy logic in menu context.
@@ -240,3 +240,146 @@ Follow this and you'll ship a modern, performant OpenMW Lua mod that plays nicel
     *   Rely on the official 0.49.0 Lua API documentation as your primary reference.
 
 By keeping these points in mind, especially around storage handling, data serialization, and script context limitations, you can significantly improve the stability and reliability of your OpenMW 0.49 Lua mods.
+
+---
+
+### 14. Critical Learnings from TwentyTwentyObjects Debugging
+
+*Real-world lessons from fixing a broken OpenMW mod.*
+
+#### **Storage API Gotchas:**
+
+1. **OpenMW storage returns userdata, not tables!**
+   ```lua
+   -- WRONG - This will always fail:
+   local profiles = storage:get('profiles')
+   if type(profiles) == 'table' then  -- Always false! It's userdata!
+   
+   -- RIGHT - Just check for nil:
+   local profiles = storage:get('profiles')
+   if profiles ~= nil then  -- Works with userdata
+   ```
+
+2. **You CANNOT serialize userdata for events**
+   - Storage API returns userdata objects that look/act like tables but aren't
+   - Events require serializable data (strings, numbers, booleans, plain tables)
+   - Converting userdata to plain tables is NOT straightforward
+
+3. **Menu scripts cannot write to storage directly**
+   - Must send events to GLOBAL script to update storage
+   - This is undocumented but critical!
+
+#### **Function Declaration Order Matters:**
+
+```lua
+-- WRONG - Functions used before declaration:
+local function createTabContent()
+    return createToggle("test", true, function() end)  -- Error!
+end
+
+local function createToggle(label, value, onChange)
+    -- ...
+end
+
+-- RIGHT - Forward declare or define before use:
+local createToggle  -- Forward declaration
+
+local function createTabContent()
+    return createToggle("test", true, function() end)  -- Works!
+end
+
+createToggle = function(label, value, onChange)  -- Note: no 'local'
+    -- ...
+end
+```
+
+#### **UI API Constant Names:**
+
+OpenMW uses underscores in alignment constants:
+- `ui.ALIGNMENT.Space_Between` NOT `SpaceBetween`
+- `ui.ALIGNMENT.Start` NOT `start`
+- Check the actual API docs, not what seems logical!
+
+#### **Event System Limitations:**
+
+1. **Serialization is STRICT**
+   - No functions, no userdata, no circular references
+   - Even nested tables can cause issues
+   - When in doubt, create minimal data structures
+
+2. **makeSerializable() is a LIE**
+   - You can't reliably convert arbitrary userdata to tables
+   - Some userdata objects don't support pairs() iteration
+   - The safest approach: rebuild data from scratch
+
+#### **Async Availability:**
+
+- `openmw.async` IS available in GLOBAL scripts (despite some docs)
+- But timing matters - may not be available during top-level execution
+- Always check with `if async and async.callback then`
+
+#### **Debug Patterns That Work:**
+
+```lua
+-- Add debug prints at EVERY step:
+print("[MOD DEBUG] Script parsing started")
+print("[MOD DEBUG] After requires - async type: " .. type(async))
+print("[MOD DEBUG] Storage init result: " .. tostring(result))
+
+-- Log types of everything:
+print("[MOD DEBUG] Type of profiles: " .. type(profiles))
+```
+
+#### **Storage Initialization Pattern:**
+
+```lua
+-- Don't trust hasProfiles() or complex checks
+-- Just check if the key exists:
+local profilesData = storage:get('profiles')
+if profilesData == nil then
+    storage:set('profiles', {})  -- Initialize with empty table
+end
+```
+
+#### **The REAL Solution for Storage Data in Events:**
+
+Instead of trying to serialize storage userdata, **rebuild the data**:
+
+```lua
+-- DON'T DO THIS:
+local profiles = storage:get('profiles')
+sendEvent('Update', { profiles = makeSerializable(profiles) })  -- Risky!
+
+-- DO THIS:
+local profiles = storage:get('profiles')
+local cleanProfiles = {}
+if profiles then
+    for i, profile in ipairs(profiles) do
+        cleanProfiles[i] = {
+            name = profile.name,
+            key = profile.key,
+            -- Explicitly copy each field you need
+        }
+    end
+end
+sendEvent('Update', { profiles = cleanProfiles })
+```
+
+#### **PowerShell != Bash:**
+
+- Use `Write-Host` not `echo` for messages
+- Paths use backslashes: `C:\Path\To\File`
+- No `ls`, use `dir` or `Get-ChildItem`
+
+#### **When Documentation Lies:**
+
+1. Test everything in-game with print statements
+2. Look at working mods (PCP-OpenMW) for patterns
+3. The engine source is the only truth
+4. API behavior can differ between contexts even when docs say otherwise
+
+#### **The Golden Rule:**
+
+**If it's not a string, number, boolean, or plain Lua table with only those types, it CANNOT go in an event.**
+
+---

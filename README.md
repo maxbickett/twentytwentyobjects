@@ -65,8 +65,8 @@ TwentyTwentyObjects/
         ├── player.lua
         ├── player_native.lua
         ├── player_optimized.lua
-        ├── settings.lua
         ├── settings_improved.lua
+        ├── hotkeyListener.lua
         └── util/
             ├── labelLayout.lua
             ├── labelLayout_jitter.lua

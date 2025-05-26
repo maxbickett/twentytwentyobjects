@@ -1,3 +1,4 @@
+print("[TTO DEBUG SETTINGS_IMPROVED] Script parsing started.")
 -- settings_improved.lua: Enhanced menu script for Twenty Twenty Objects Mod
 -- Creates an improved configuration interface with quick-start presets
 
@@ -5,26 +6,54 @@ local ui = require('openmw.ui')
 local I = require('openmw.interfaces')
 local async = require('openmw.async')
 local input = require('openmw.input') -- For key press handling WITHIN THE MENU (e.g. binding)
-local util = require('openmw_aux.util') -- Added for util.map and helpers
--- local world = require('openmw.world') -- REMOVED: Not available in MENU context
+-- Attempt to load the optional helper library `openmw_aux.util` for its `map` helper.
+-- If it isn't present (typical on fresh installs), gracefully fall back to a minimal local implementation
+local ok, auxUtil = pcall(require, 'openmw_aux.util')
+local util = require('openmw.util')
+local col = util.color.rgb
+local v2 = util.vector2  -- Shorthand like PCP uses
+
+-- Make any given layout fill the available space and become scrollable so content never overlaps
+local function scrollWrap(innerLayout)
+    return {
+        type = ui.TYPE.Container,
+        props = { scrollable = true, relativeSize = v2(1,1) },
+        content = ui.content({ innerLayout })
+    }
+end
 
 local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
--- storage_module will be required later when data push comes from Global
+local storage_module = require('scripts.TwentyTwentyObjects.util.storage') -- ADDED THIS
+-- storage_module will be required later when data push comes from Global -- This comment is now outdated
 
-local auxUtil = require('openmw_aux.util')
-local map = auxUtil.map
+-- Initialize logger with default settings
+logger_module.init(false) -- Start with debug off
 
--- Forward declare variables that will be initialized in onInit
-local profiles = {}
-local appearanceSettings = {}
-local performanceSettings = {}
-local generalSettings = {} -- For debug mode, etc.
+local map  ---@type fun(tbl:table, fn:fun(any):any):table
+if ok and auxUtil and auxUtil.map then
+    map = auxUtil.map
+else
+    -- Simple fallback – build a new array by applying fn to each element (ipairs order)
+    map = function(tbl, fn)
+        local out = {}
+        for i, v in ipairs(tbl or {}) do
+            out[i] = fn(v)
+        end
+        return out
+    end
+end
+-- `auxUtil` is only needed for `map`; we don't keep a global reference if the require failed.
 
--- UI State
-local currentTab = "presets"  -- Start with presets for new users
-local selectedProfileIndex = 1
-local awaitingKeypress = false
-local showingPreview = false
+-- UI Colors
+local DEFAULT_TEXT_COLOR    = col(0.94, 0.83, 0.60) -- Morrowind Gold/Yellow
+local HEADER_TEXT_COLOR     = col(1.0, 0.9, 0.75)  -- Slightly brighter for main headers
+local TAB_ACTIVE_BG_COLOR   = col(0.2, 0.3, 0.4)
+local TAB_INACTIVE_BG_COLOR = col(0.1, 0.1, 0.1, 0.5)
+local TAB_ACTIVE_TEXT_COLOR = col(1, 1, 1)
+local TAB_INACTIVE_TEXT_COLOR = col(0.8, 0.8, 0.8)
+local CLICKABLE_TEXT_COLOR  = col(0.7, 0.85, 1)     -- Light blue for clickable things
+local VALUE_TEXT_COLOR      = col(0.8, 0.95, 0.8)   -- Light green for values
+local HOVER_BG_COLOR        = col(0.3, 0.4, 0.5, 0.8) -- For hover effects
 
 -- Preset configurations for common use cases
 local PRESETS = {
@@ -32,6 +61,7 @@ local PRESETS = {
         name = "Loot Hunter",
         description = "Highlights valuable items and containers",
         icon = "🗡️",
+        shows = "Items, Weapons, Armor, Containers",
         profile = {
             name = "Loot Hunter",
             key = 'e', shift = false, ctrl = false, alt = false,
@@ -48,6 +78,7 @@ local PRESETS = {
         name = "NPC Tracker", 
         description = "Find NPCs and creatures in towns or dungeons",
         icon = "👥",
+        shows = "NPCs only",
         profile = {
             name = "NPC Tracker",
             key = 'q', shift = false, ctrl = false, alt = false,
@@ -60,6 +91,7 @@ local PRESETS = {
         name = "Thief's Eye",
         description = "Spot valuable items in shops and homes",
         icon = "💎",
+        shows = "All valuable items",
         profile = {
             name = "Thief's Eye",
             key = 'z', shift = true, ctrl = false, alt = false,
@@ -75,6 +107,7 @@ local PRESETS = {
         name = "Dungeon Delver",
         description = "Everything useful in dark dungeons",
         icon = "🏛️",
+        shows = "NPCs, Creatures, Containers, Doors, Items",
         profile = {
             name = "Dungeon Delver",
             key = 'x', shift = false, ctrl = false, alt = false,
@@ -98,32 +131,101 @@ local TABS = {
     {id = "help", label = "Help", icon = "❓"}
 }
 
+-- Forward declare variables that will be initialized by the refresh event
+local profiles = {}
+local appearanceSettings = {
+    labelStyle = "native",
+    textSize = "medium",
+    lineStyle = "straight",
+    lineColor = {r=0.8, g=0.8, b=0.8, a=0.7},
+    backgroundColor = {r=0, g=0, b=0, a=0.5},
+    showIcons = true,
+    enableAnimations = true,
+    animationSpeed = "normal",
+    fadeDistance = true,
+    groupSimilar = false,
+    opacity = 0.8
+}
+local performanceSettings = {
+    maxLabels = 20,
+    updateInterval = "medium",
+    scanInterval = "medium",
+    distanceCulling = true,
+    cullDistance = 2000,
+    occlusionChecks = "basic",
+    smartGrouping = false
+}
+local generalSettings = {
+    debug = false
+} 
+
+-- UI State
+local currentTab = "presets"  
+local selectedProfileIndex = 1
+local awaitingKeypress = false
+-- local showingPreview = false -- Not currently used in the restored logic, can be added if needed
+
+-- Root UI element of the settings page (assigned in onInit)
+local rootElement = nil
+
+-- Helper to wrap UI event callbacks (OpenMW requires async:callback in MENU context)
+local callbackWrapCount = 0
+local c = function(fn) 
+    callbackWrapCount = callbackWrapCount + 1
+    -- Only log every 10th callback to reduce spam
+    if callbackWrapCount % 10 == 1 then
+        logger_module.debug("[Settings] Creating async callback wrapper #" .. callbackWrapCount)
+    end
+    if not async then
+        logger_module.error("[Settings] ERROR: async is nil!")
+        return fn
+    end
+    if not async.callback then
+        logger_module.error("[Settings] ERROR: async.callback is nil!")
+        return fn
+    end
+    local wrapped = async:callback(fn)
+    return wrapped
+end
+
+-- Forward declarations for all helper functions
+local createAppearanceSettings, createPerformanceSettings, createHelpContent, createProfileList, createSettingsSection
+local createToggle, createRangeSlider, createCheckbox, createFilterCategories, createStylePreview
+
 -- Helper: Save current profiles to storage
 local function saveProfiles()
     if not storage_module then return end -- Guard against calls before onInit
-    storage_module.setProfiles(profiles)
-    logger_module.debug("Profiles saved to storage")
+    -- Menu context is read-only for storage; send to global script for saving
+    local core = require('openmw.core')
+    core.sendGlobalEvent('TTO_UpdateProfiles', {profiles = profiles})
+    logger_module.debug("Profiles update event sent to global script")
 end
 
 -- Helper: Save appearance settings
 local function saveAppearanceSettings()
     if not storage_module then return end
-    storage_module.set('appearance', appearanceSettings)
-    logger_module.debug("Appearance settings saved")
+    -- Menu context is read-only for storage; send to global script for saving
+    local core = require('openmw.core')
+    core.sendGlobalEvent('TTO_UpdateAppearance', {appearance = appearanceSettings})
+    logger_module.debug("Appearance settings update event sent to global script")
 end
 
 -- Helper: Save performance settings
 local function savePerformanceSettings()
     if not storage_module then return end
-    storage_module.set('performance', performanceSettings)
-    logger_module.debug("Performance settings saved")
+    -- Menu context is read-only for storage; send to global script for saving
+    local core = require('openmw.core')
+    core.sendGlobalEvent('TTO_UpdatePerformance', {performance = performanceSettings})
+    logger_module.debug("Performance settings update event sent to global script")
 end
 
 -- Helper: Save general settings
 local function saveGeneralSettings()
     if not storage_module then return end
-    storage_module.set('general', generalSettings)
-    logger_module.debug("General settings saved")
+    -- Menu context is read-only for storage; send to global script for saving
+    local core = require('openmw.core')
+    core.sendGlobalEvent('TTO_UpdateGeneral', {general = generalSettings})
+    logger_module.debug("General settings update event sent to global script")
 end
 
 -- Helper: Create tab button
@@ -131,11 +233,13 @@ local function createTabButton(tab, isActive)
     return {
         type = ui.TYPE.Container,
         props = {
-            backgroundColor = isActive and {0.2, 0.3, 0.4, 1} or {0.1, 0.1, 0.1, 0.5},
+            backgroundColor = isActive and TAB_ACTIVE_BG_COLOR or TAB_INACTIVE_BG_COLOR,
             borderColor = isActive and {0.4, 0.5, 0.6, 1} or {0.2, 0.2, 0.2, 1},
-            borderSize = 1,
-            padding = 10,
-            margin = 2
+            borderSize = isActive and 2 or 1,
+            borderRadius = {4, 4, 0, 0}, -- Rounded top corners only
+            padding = {horizontal = 15, vertical = 8},
+            margin = {right = 2},
+            minWidth = 100
         },
         content = ui.content({
             {
@@ -143,20 +247,33 @@ local function createTabButton(tab, isActive)
                 props = {
                     text = tab.icon .. " " .. tab.label,
                     textSize = 16,
-                    textColor = isActive and {1, 1, 1, 1} or {0.7, 0.7, 0.7, 1}
+                    textColor = isActive and TAB_ACTIVE_TEXT_COLOR or TAB_INACTIVE_TEXT_COLOR,
+                    textAlign = ui.ALIGNMENT.Center
                 }
             }
         }),
         events = {
-            mouseClick = function()
+            mouseClick = c(function()
                 currentTab = tab.id
                 I.TwentyTwentyObjects.refreshUI()
-            end
+            end),
+            mouseEnter = c(function(e)
+                if not isActive then
+                    e.target.props.backgroundColor = HOVER_BG_COLOR
+                    e.target:update()
+                end
+            end),
+            mouseLeave = c(function(e)
+                if not isActive then
+                    e.target.props.backgroundColor = TAB_INACTIVE_BG_COLOR
+                    e.target:update()
+                end
+            end)
         }
     }
 end
 
--- Helper: Create preset card
+-- Create preset card
 local function createPresetCard(preset)
     return {
         type = ui.TYPE.Container,
@@ -165,38 +282,64 @@ local function createPresetCard(preset)
             borderColor = {0.3, 0.3, 0.3, 1},
             borderSize = 2,
             padding = 15,
-            margin = 5,
-            minWidth = 250
+            margin = {bottom = 8},
+            minWidth = 250,
+            autoSize = true
         },
         content = ui.content({
             {
-                type = ui.TYPE.Text,
+                type = ui.TYPE.Flex,
                 props = {
-                    text = preset.icon .. " " .. preset.name,
-                    textSize = 20,
-                    textColor = {1, 0.9, 0.7, 1}
-                }
-            },
-            {
-                type = ui.TYPE.Text,
-                props = {
-                    text = "\n" .. preset.description,
-                    textSize = 14,
-                    textColor = {0.8, 0.8, 0.8, 1}
-                }
-            },
-            {
-                type = ui.TYPE.Container,
-                props = {
-                    margin = {top = 15}
+                    vertical = true,
+                    arrange = ui.ALIGNMENT.Start,
+                    autoSize = true
                 },
                 content = ui.content({
                     {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = preset.name,
+                            textSize = 18,
+                            textColor = HEADER_TEXT_COLOR,
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = preset.description,
+                            textSize = 14,
+                            textColor = DEFAULT_TEXT_COLOR,
+                            margin = {bottom = 10}
+                        }
+                    },
+                    {
                         type = ui.TYPE.Container,
                         props = {
-                            backgroundColor = {0.2, 0.4, 0.2, 1},
-                            padding = 8,
-                            borderRadius = 4
+                            backgroundColor = {0.2, 0.2, 0.2, 0.5},
+                            padding = 10,
+                            borderRadius = 4,
+                            margin = {bottom = 10},
+                            autoSize = true
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "Shows: " .. preset.shows,
+                                    textSize = 12,
+                                    textColor = VALUE_TEXT_COLOR
+                                }
+                            }
+                        })
+                    },
+                    {
+                        type = ui.TYPE.Container,
+                        props = {
+                            backgroundColor = {0.2, 0.3, 0.4, 1},
+                            padding = {horizontal = 20, vertical = 10},
+                            borderRadius = 4,
+                            autoSize = true
                         },
                         content = ui.content({
                             {
@@ -204,21 +347,28 @@ local function createPresetCard(preset)
                                 props = {
                                     text = "Use This Preset",
                                     textSize = 14,
-                                    textAlign = ui.ALIGNMENT.Center
+                                    textAlign = ui.ALIGNMENT.Center,
+                                    textColor = TAB_ACTIVE_TEXT_COLOR
                                 }
                             }
                         }),
                         events = {
-                            mouseClick = function()
+                            mouseClick = c(function()
                                 -- Add preset as new profile
                                 table.insert(profiles, preset.profile)
                                 selectedProfileIndex = #profiles
-                                saveProfiles() -- This will save the updated local 'profiles' table
-                                
-                                -- Switch to profiles tab
                                 currentTab = "profiles"
+                                saveProfiles()
                                 I.TwentyTwentyObjects.refreshUI()
-                            end
+                            end),
+                            mouseEnter = c(function(e)
+                                e.target.props.backgroundColor = HOVER_BG_COLOR
+                                e.target:update()
+                            end),
+                            mouseLeave = c(function(e)
+                                e.target.props.backgroundColor = {0.2, 0.3, 0.4, 1}
+                                e.target:update()
+                            end)
                         }
                     }
                 })
@@ -250,7 +400,7 @@ local function createKeyDisplay(profile)
                 props = {
                     text = table.concat(keyParts, " + "),
                     textSize = 18,
-                    textColor = {1, 1, 0.8, 1},
+                    textColor = col(1, 1, 0.8), -- Keep this bright yellow for keys
                     font = "MonoFont"  -- If available
                 }
             }
@@ -260,144 +410,66 @@ end
 
 -- Create content based on current tab
 local function createTabContent()
+    print("[TTO DEBUG SETTINGS_IMPROVED] createTabContent() called for tab: " .. currentTab)
     if currentTab == "presets" then
-        -- Presets tab
-        return {
-            type = ui.TYPE.Flex,
+        local presetCards = map(PRESETS or {}, createPresetCard)
+        -- Add a test button at the end
+        table.insert(presetCards, {
+            type = ui.TYPE.Container,
             props = {
-                vertical = true,
-                arrange = ui.ALIGNMENT.Start
+                backgroundColor = {0.5, 0.2, 0.2, 1},
+                padding = 20,
+                margin = {top = 20},
+                autoSize = true
             },
             content = ui.content({
                 {
                     type = ui.TYPE.Text,
                     props = {
-                        text = "Choose a preset to get started quickly:",
+                        text = "TEST BUTTON - Click Me!",
                         textSize = 16,
-                        margin = {bottom = 20}
+                        textColor = col(1, 1, 1)
                     }
-                },
-                {
-                    type = ui.TYPE.Flex,
-                    props = {
-                        horizontal = true,
-                        wrap = true,
-                        arrange = ui.ALIGNMENT.Start
-                    },
-                    content = ui.content(
-                        map(PRESETS, createPresetCard)
-                    )
                 }
-            })
-        }
-        
-    elseif currentTab == "profiles" then
-        -- Profiles tab (existing functionality but better organized)
-        local profile = profiles[selectedProfileIndex]
-        
-        if not profile then
-            return {
-                type = ui.TYPE.Text,
-                props = {
-                    text = "No profiles yet. Go to Quick Start to add one!",
-                    textSize = 16
-                }
+            }),
+            events = {
+                mouseClick = c(function()
+                    print("[TTO DEBUG SETTINGS_IMPROVED] TEST BUTTON CLICKED!")
+                end)
             }
-        end
+        })
         
-        return {
-            type = ui.TYPE.Flex,
-            props = {
-                horizontal = true,
-                arrange = ui.ALIGNMENT.Start
-            },
-            content = ui.content({
-                -- Profile list (left)
-                {
-                    type = ui.TYPE.Container,
-                    props = {
-                        minWidth = 200,
-                        margin = {right = 20}
-                    },
-                    content = ui.content({
-                        createProfileList()
-                    })
-                },
-                
-                -- Profile editor (right)
-                {
-                    type = ui.TYPE.Flex,
-                    props = {
-                        vertical = true,
-                        arrange = ui.ALIGNMENT.Start,
-                        grow = 1
-                    },
-                    content = ui.content({
-                        -- Key binding section
-                        {
-                            type = ui.TYPE.Container,
-                            props = {
-                                backgroundColor = {0.05, 0.05, 0.05, 0.5},
-                                padding = 15,
-                                margin = {bottom = 10}
-                            },
-                            content = ui.content({
-                                {
-                                    type = ui.TYPE.Text,
-                                    props = {
-                                        text = "Hotkey Binding",
-                                        textSize = 18,
-                                        margin = {bottom = 10}
-                                    }
-                                },
-                                createKeyDisplay(profile),
-                                {
-                                    type = ui.TYPE.Container,
-                                    props = {
-                                        margin = {top = 10}
-                                    },
-                                    content = ui.content({
-                                        {
-                                            type = ui.TYPE.Text,
-                                            props = {
-                                                text = awaitingKeypress and "Press any key..." or "[Click to change]",
-                                                textSize = 14,
-                                                textColor = {0.7, 0.7, 1, 1}
-                                            },
-                                            events = {
-                                                mouseClick = function()
-                                                    awaitingKeypress = true
-                                                end
-                                            }
-                                        }
-                                    })
-                                }
-                            })
-                        },
-                        
-                        -- Settings sections
-                        createSettingsSection(profile)
-                    })
-                }
-            })
+        return { 
+            type = ui.TYPE.Flex, 
+            props = { 
+                vertical = true,
+                arrange = ui.ALIGNMENT.Start,
+                autoSize = true
+            }, 
+            content = ui.content(presetCards) 
         }
-        
+    elseif currentTab == "profiles" then
+        if not profiles or #profiles == 0 then return {type=ui.TYPE.Text, props={text="No profiles yet.", textColor = DEFAULT_TEXT_COLOR}} end
+        local profile = profiles[selectedProfileIndex]
+        if not profile then return {type=ui.TYPE.Text, props={text="Selected profile not found.", textColor = DEFAULT_TEXT_COLOR}} end
+        return { type = ui.TYPE.Flex, props = { horizontal = true }, content = ui.content({ createProfileList(), createSettingsSection(profile) }) }
     elseif currentTab == "appearance" then
-        -- Appearance settings
         return createAppearanceSettings()
-        
     elseif currentTab == "performance" then
-        -- Performance settings
         return createPerformanceSettings()
-        
     elseif currentTab == "help" then
-        -- Help tab
         return createHelpContent()
     end
+    return {type=ui.TYPE.Text, props={text="Unknown tab: " .. currentTab, textColor = DEFAULT_TEXT_COLOR}}
 end
 
 -- Create settings section with better organization
-local function createSettingsSection(profile)
+createSettingsSection = function(profile)
+    -- Ensure profile has filters
+    if not profile.filters then
+        profile.filters = {}
+    end
+    
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -405,6 +477,76 @@ local function createSettingsSection(profile)
             arrange = ui.ALIGNMENT.Start
         },
         content = ui.content({
+            -- Hotkey display
+            {
+                type = ui.TYPE.Container,
+                props = {
+                    backgroundColor = {0.1, 0.1, 0.1, 0.8},
+                    padding = 15,
+                    margin = {bottom = 10},
+                    borderColor = {0.4, 0.4, 0.4, 1},
+                    borderSize = 1
+                },
+                content = ui.content({
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "Hotkey",
+                            textSize = 16,
+                            margin = {bottom = 10},
+                            textColor = HEADER_TEXT_COLOR
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Flex,
+                        props = {
+                            horizontal = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            createKeyDisplay(profile),
+                            {
+                                type = ui.TYPE.Widget,
+                                props = {
+                                    relativeSize = v2(1, 0)  -- Spacer that takes up remaining horizontal space
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Container,
+                                props = {
+                                    backgroundColor = {0.2, 0.2, 0.4, 1},
+                                    padding = {horizontal = 15, vertical = 8},
+                                    borderRadius = 4
+                                },
+                                content = ui.content({
+                                    {
+                                        type = ui.TYPE.Text,
+                                        props = {
+                                            text = "Change Key",
+                                            textSize = 14,
+                                            textColor = CLICKABLE_TEXT_COLOR
+                                        }
+                                    }
+                                }),
+                                events = {
+                                    mouseClick = c(function()
+                                        -- TODO: Implement key binding
+                                        print("[TTO DEBUG] Key binding not yet implemented")
+                                    end),
+                                    mouseEnter = c(function(e)
+                                        e.target.props.backgroundColor = HOVER_BG_COLOR
+                                        e.target:update()
+                                    end),
+                                    mouseLeave = c(function(e)
+                                        e.target.props.backgroundColor = {0.2, 0.2, 0.4, 1}
+                                        e.target:update()
+                                    end)
+                                }
+                            }
+                        })
+                    }
+                })
+            },
             -- Basic settings
             {
                 type = ui.TYPE.Container,
@@ -419,7 +561,8 @@ local function createSettingsSection(profile)
                         props = {
                             text = "Basic Settings",
                             textSize = 18,
-                            margin = {bottom = 10}
+                            margin = {bottom = 10},
+                            textColor = HEADER_TEXT_COLOR
                         }
                     },
                     -- Mode toggle
@@ -448,7 +591,8 @@ local function createSettingsSection(profile)
                         props = {
                             text = "What to Highlight",
                             textSize = 18,
-                            margin = {bottom = 10}
+                            margin = {bottom = 10},
+                            textColor = HEADER_TEXT_COLOR
                         }
                     },
                     createFilterCategories(profile.filters)
@@ -459,7 +603,7 @@ local function createSettingsSection(profile)
 end
 
 -- Create visual toggle switch
-local function createToggle(label, value, onChange)
+createToggle = function(label, value, onChange)
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -473,7 +617,8 @@ local function createToggle(label, value, onChange)
                 props = {
                     text = label .. ": ",
                     textSize = 14,
-                    minWidth = 150
+                    minWidth = 150,
+                    textColor = DEFAULT_TEXT_COLOR
                 }
             },
             {
@@ -493,15 +638,15 @@ local function createToggle(label, value, onChange)
                             width = 21,
                             height = 21,
                             borderRadius = 10,
-                            position = value and {x = 37, y = 0} or {x = 0, y = 0}
+                            position = value and v2(37, 0) or v2(0, 0)
                         }
                     }
                 }),
                 events = {
-                    mouseClick = function()
+                    mouseClick = c(function()
                         onChange(not value)
                         I.TwentyTwentyObjects.refreshUI()
-                    end
+                    end)
                 }
             }
         })
@@ -509,7 +654,9 @@ local function createToggle(label, value, onChange)
 end
 
 -- Create range slider with visual feedback
-local function createRangeSlider(label, value, min, max, onChange)
+createRangeSlider = function(label, value, min, max, onChange)
+    -- Guard against nil value
+    if not value then value = min end
     local percent = (value - min) / (max - min)
     
     return {
@@ -523,14 +670,21 @@ local function createRangeSlider(label, value, min, max, onChange)
                 type = ui.TYPE.Flex,
                 props = {
                     horizontal = true,
-                    arrange = ui.ALIGNMENT.SpaceBetween
+                    arrange = ui.ALIGNMENT.Start
                 },
                 content = ui.content({
                     {
                         type = ui.TYPE.Text,
                         props = {
                             text = label,
-                            textSize = 14
+                            textSize = 14,
+                            textColor = DEFAULT_TEXT_COLOR
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Widget,
+                        props = {
+                            relativeSize = v2(1, 0)  -- Spacer that takes up remaining horizontal space
                         }
                     },
                     {
@@ -538,7 +692,7 @@ local function createRangeSlider(label, value, min, max, onChange)
                         props = {
                             text = tostring(math.floor(value)) .. " units",
                             textSize = 14,
-                            textColor = {0.7, 0.7, 1, 1}
+                            textColor = VALUE_TEXT_COLOR
                         }
                     }
                 })
@@ -563,13 +717,13 @@ local function createRangeSlider(label, value, min, max, onChange)
                     }
                 }),
                 events = {
-                    mouseClick = function(e)
+                    mouseClick = c(function(e)
                         -- Simple click position to value conversion
                         local clickPercent = e.position.x / 300
                         local newValue = min + (max - min) * clickPercent
                         onChange(math.floor(newValue))
                         I.TwentyTwentyObjects.refreshUI()
-                    end
+                    end)
                 }
             }
         })
@@ -577,7 +731,7 @@ local function createRangeSlider(label, value, min, max, onChange)
 end
 
 -- Create filter categories with visual grouping
-local function createFilterCategories(filters)
+createFilterCategories = function(filters)
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -597,7 +751,7 @@ local function createFilterCategories(filters)
                         props = {
                             text = "📍 Characters",
                             textSize = 16,
-                            textColor = {0.9, 0.9, 0.6, 1},
+                            textColor = HEADER_TEXT_COLOR, -- Use header for category
                             margin = {bottom = 5}
                         }
                     },
@@ -624,7 +778,7 @@ local function createFilterCategories(filters)
                         props = {
                             text = "🎒 Items",
                             textSize = 16,
-                            textColor = {0.9, 0.9, 0.6, 1},
+                            textColor = HEADER_TEXT_COLOR, -- Use header for category
                             margin = {bottom = 5}
                         }
                     },
@@ -678,7 +832,7 @@ local function createFilterCategories(filters)
                         props = {
                             text = "🏛️ World Objects",
                             textSize = 16,
-                            textColor = {0.9, 0.9, 0.6, 1},
+                            textColor = HEADER_TEXT_COLOR, -- Use header for category
                             margin = {bottom = 5}
                         }
                     },
@@ -697,7 +851,7 @@ local function createFilterCategories(filters)
 end
 
 -- Create visual checkbox
-local function createCheckbox(label, checked, onChange)
+createCheckbox = function(label, checked, onChange)
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -723,22 +877,23 @@ local function createCheckbox(label, checked, onChange)
                             text = "✓",
                             textSize = 14,
                             textAlign = ui.ALIGNMENT.Center,
-                            textColor = {1, 1, 1, 1}
+                            textColor = TAB_ACTIVE_TEXT_COLOR -- White checkmark
                         }
                     } or {}
                 }),
                 events = {
-                    mouseClick = function()
+                    mouseClick = c(function()
                         onChange(not checked)
                         I.TwentyTwentyObjects.refreshUI()
-                    end
+                    end)
                 }
             },
             {
                 type = ui.TYPE.Text,
                 props = {
                     text = label,
-                    textSize = 14
+                    textSize = 14,
+                    textColor = DEFAULT_TEXT_COLOR
                 }
             }
         })
@@ -746,20 +901,7 @@ local function createCheckbox(label, checked, onChange)
 end
 
 -- Create appearance settings
-local function createAppearanceSettings()
-    -- Ensure appearanceSettings is populated
-    if not appearanceSettings.labelStyle then
-        appearanceSettings = { -- Default values if not found
-            labelStyle = "native",
-            textSize = "medium",
-            lineStyle = "straight",
-            lineColor = {r=0.8, g=0.8, b=0.8, a=0.7},
-            backgroundColor = {r=0, g=0, b=0, a=0.5},
-            showIcons = true,
-            enableAnimations = true,
-            animationSpeed = "normal"
-        }
-    end
+createAppearanceSettings = function()
 
     return {
         type = ui.TYPE.Flex,
@@ -773,7 +915,8 @@ local function createAppearanceSettings()
                 props = {
                     text = "Customize how labels look",
                     textSize = 16,
-                    margin = {bottom = 20}
+                    margin = {bottom = 20},
+                    textColor = DEFAULT_TEXT_COLOR
                 }
             },
             
@@ -791,7 +934,8 @@ local function createAppearanceSettings()
                         props = {
                             text = "Label Style",
                             textSize = 16,
-                            margin = {bottom = 10}
+                            margin = {bottom = 10},
+                            textColor = HEADER_TEXT_COLOR
                         }
                     },
                     -- Style previews
@@ -830,7 +974,7 @@ local function createAppearanceSettings()
 end
 
 -- Create style preview card
-local function createStylePreview(name, style, isSelected)
+createStylePreview = function(name, style, isSelected)
     return {
         type = ui.TYPE.Container,
         props = {
@@ -858,7 +1002,7 @@ local function createStylePreview(name, style, isSelected)
                         props = {
                             text = "Iron Sword",
                             textSize = 14,
-                            textColor = {1, 1, 1, 1}
+                            textColor = col(1, 1, 1) -- White text for preview on various BGs
                         }
                     }
                 })
@@ -868,32 +1012,73 @@ local function createStylePreview(name, style, isSelected)
                 props = {
                     text = name,
                     textSize = 12,
-                    textAlign = ui.ALIGNMENT.Center
+                    textAlign = ui.ALIGNMENT.Center,
+                    textColor = DEFAULT_TEXT_COLOR
                 }
             }
         }),
         events = {
-            mouseClick = function()
+            mouseClick = c(function()
                 appearanceSettings.labelStyle = style
                 saveAppearanceSettings()
                 I.TwentyTwentyObjects.refreshUI()
-            end
+            end)
         }
     }
 end
 
 -- Create performance settings
-local function createPerformanceSettings()
-    if not performanceSettings.maxLabels then
-         performanceSettings = { -- Default values
-            maxLabels = 20,
-            updateInterval = "medium", -- e.g., 0.05s
-            scanInterval = "medium",   -- e.g., 0.25s
-            distanceCulling = true,
-            cullDistance = 2000,
-            occlusionChecks = "basic" -- none, basic, advanced (raycast)
+createPerformanceSettings = function()
+    
+    -- Helper function to create performance preset buttons
+    local function createPerformancePreset(name, level, isSelected)
+        return {
+            type = ui.TYPE.Container,
+            props = {
+                backgroundColor = isSelected and {0.2, 0.3, 0.4, 1} or {0.1, 0.1, 0.1, 1},
+                borderColor = isSelected and {0.4, 0.5, 0.6, 1} or {0.2, 0.2, 0.2, 1},
+                borderSize = 2,
+                padding = 10,
+                margin = 5,
+                minWidth = 80
+            },
+            content = ui.content({
+                {
+                    type = ui.TYPE.Text,
+                    props = {
+                        text = name,
+                        textSize = 14,
+                        textAlign = ui.ALIGNMENT.Center,
+                        textColor = isSelected and TAB_ACTIVE_TEXT_COLOR or DEFAULT_TEXT_COLOR
+                    }
+                }
+            }),
+            events = {
+                mouseClick = c(function()
+                    -- Apply performance preset
+                    if level == "low" then
+                        performanceSettings.maxLabels = 10
+                        performanceSettings.updateInterval = "low"
+                        performanceSettings.occlusionChecks = "none"
+                        performanceSettings.smartGrouping = false
+                    elseif level == "balanced" then
+                        performanceSettings.maxLabels = 20
+                        performanceSettings.updateInterval = "medium"
+                        performanceSettings.occlusionChecks = "basic"
+                        performanceSettings.smartGrouping = false
+                    elseif level == "high" then
+                        performanceSettings.maxLabels = 50
+                        performanceSettings.updateInterval = "high"
+                        performanceSettings.occlusionChecks = "basic"
+                        performanceSettings.smartGrouping = true
+                    end
+                    savePerformanceSettings()
+                    I.TwentyTwentyObjects.refreshUI()
+                end)
+            }
         }
     end
+    
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -906,7 +1091,8 @@ local function createPerformanceSettings()
                 props = {
                     text = "Adjust for better performance",
                     textSize = 16,
-                    margin = {bottom = 20}
+                    margin = {bottom = 20},
+                    textColor = DEFAULT_TEXT_COLOR
                 }
             },
             
@@ -924,7 +1110,8 @@ local function createPerformanceSettings()
                         props = {
                             text = "Quick Settings",
                             textSize = 16,
-                            margin = {bottom = 10}
+                            margin = {bottom = 10},
+                            textColor = HEADER_TEXT_COLOR
                         }
                     },
                     {
@@ -947,7 +1134,8 @@ local function createPerformanceSettings()
                 props = {
                     text = "Advanced Settings",
                     textSize = 16,
-                    margin = {top = 20, bottom = 10}
+                    margin = {top = 20, bottom = 10},
+                    textColor = HEADER_TEXT_COLOR
                 }
             },
             
@@ -970,15 +1158,16 @@ local function createPerformanceSettings()
                 type = ui.TYPE.Text,
                 props = {
                     text = (generalSettings.debug and "[X] Debug Logging" or "[ ] Debug Logging"),
-                    textSize = 14
+                    textSize = 14,
+                    textColor = DEFAULT_TEXT_COLOR
                 },
                 events = {
-                    mouseClick = function()
+                    mouseClick = c(function()
                         generalSettings.debug = not generalSettings.debug
                         saveGeneralSettings()
                         logger_module.init(storage_module, generalSettings.debug) -- Re-init logger with new debug state
                         I.TwentyTwentyObjects.refreshUI()
-                    end
+                    end)
                 }
             }
         })
@@ -986,12 +1175,13 @@ local function createPerformanceSettings()
 end
 
 -- Create help content
-local function createHelpContent()
+createHelpContent = function()
     return {
         type = ui.TYPE.Flex,
         props = {
             vertical = true,
-            arrange = ui.ALIGNMENT.Start
+            arrange = ui.ALIGNMENT.Start,
+            autoSize = true
         },
         content = ui.content({
             {
@@ -999,85 +1189,309 @@ local function createHelpContent()
                 props = {
                     text = "Getting Started",
                     textSize = 20,
-                    textColor = {1, 0.9, 0.7, 1},
+                    textColor = HEADER_TEXT_COLOR,
                     margin = {bottom = 15}
                 }
             },
             {
-                type = ui.TYPE.Text,
-                props = {
-                    text = "1. Go to Quick Start and choose a preset\n" ..
-                           "2. Press the hotkey in-game to see labels\n" ..
-                           "3. Customize in My Profiles tab\n\n" ..
-                           "Tips:\n" ..
-                           "• Hold mode: Labels show while key is held\n" ..
-                           "• Toggle mode: Press once to show, again to hide\n" ..
-                           "• Smaller radius = better performance\n" ..
-                           "• Labels won't show through walls\n\n" ..
-                           "Common Issues:\n" ..
-                           "• No labels? Check your filters and radius\n" ..
-                           "• Too many labels? Reduce radius or filters\n" ..
-                           "• Can't see labels? Check Appearance settings",
-                    textSize = 14,
-                    textColor = {0.9, 0.9, 0.9, 1}
-                }
-            }
-        })
-    }
-end
-
--- Main layout
-local function createMainLayout()
-    return {
-        type = ui.TYPE.Flex,
-        props = {
-            vertical = true,
-            arrange = ui.ALIGNMENT.Start
-        },
-        content = ui.content({
-            -- Header
-            {
                 type = ui.TYPE.Container,
                 props = {
-                    backgroundColor = {0.1, 0.15, 0.2, 1},
+                    backgroundColor = {0.05, 0.05, 0.05, 0.5},
                     padding = 15,
-                    margin = {bottom = 10}
+                    margin = {bottom = 10},
+                    autoSize = true
                 },
                 content = ui.content({
                     {
                         type = ui.TYPE.Text,
                         props = {
-                            text = "🔍 Interactable Highlight Settings",
-                            textSize = 24,
-                            textAlign = ui.ALIGNMENT.Center
+                            text = "1. Go to Quick Start and choose a preset",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "2. Press the hotkey in-game to see labels",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "3. Customize in My Profiles tab",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9)
                         }
                     }
                 })
             },
-            
-            -- Tab bar
             {
-                type = ui.TYPE.Flex,
+                type = ui.TYPE.Text,
                 props = {
-                    horizontal = true,
-                    arrange = ui.ALIGNMENT.Start,
-                    margin = {bottom = 20}
-                },
-                content = ui.content(
-                    map(TABS, function(tab)
-                        return createTabButton(tab, currentTab == tab.id)
-                    end)
-                )
+                    text = "Tips",
+                    textSize = 18,
+                    textColor = HEADER_TEXT_COLOR,
+                    margin = {top = 15, bottom = 10}
+                }
             },
-            
-            -- Tab content
             {
                 type = ui.TYPE.Container,
                 props = {
-                    padding = 10
+                    backgroundColor = {0.05, 0.05, 0.05, 0.5},
+                    padding = 15,
+                    margin = {bottom = 10},
+                    autoSize = true
                 },
                 content = ui.content({
-                    createTabContent()
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• Hold mode: Labels show while key is held",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• Toggle mode: Press once to show, again to hide",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• Smaller radius = better performance",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• Labels won't show through walls",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9)
+                        }
+                    }
+                })
+            },
+            {
+                type = ui.TYPE.Text,
+                props = {
+                    text = "Common Issues",
+                    textSize = 18,
+                    textColor = HEADER_TEXT_COLOR,
+                    margin = {top = 15, bottom = 10}
+                }
+            },
+            {
+                type = ui.TYPE.Container,
+                props = {
+                    backgroundColor = {0.05, 0.05, 0.05, 0.5},
+                    padding = 15,
+                    autoSize = true
+                },
+                content = ui.content({
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• No labels? Check your filters and radius",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• Too many labels? Reduce radius or filters",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9),
+                            margin = {bottom = 5}
+                        }
+                    },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = "• Can't see labels? Check Appearance settings",
+                            textSize = 14,
+                            textColor = col(0.9, 0.9, 0.9)
+                        }
+                    }
+                })
+            }
+        })
+    }
+end
+
+-- Helper: list of profiles on Profiles tab
+createProfileList = function()
+    local rows = {}
+    for i, prof in ipairs(profiles) do
+        table.insert(rows, {
+            type = ui.TYPE.Container,
+            props = {
+                autoSize = true,
+                margin = {bottom = 4},
+                backgroundColor = (i == selectedProfileIndex) and TAB_ACTIVE_BG_COLOR or {0,0,0,0},
+                padding = 4
+            },
+            content = ui.content({
+                {
+                    type = ui.TYPE.Text,
+                    props = { 
+                        text = prof.name or ("Profile "..i), 
+                        textColor = (i == selectedProfileIndex) and TAB_ACTIVE_TEXT_COLOR or DEFAULT_TEXT_COLOR,
+                        textSize = 14
+                    }
+                }
+            }),
+            events = {
+                mouseClick = c(function()
+                    selectedProfileIndex = i
+                    I.TwentyTwentyObjects.refreshUI()
+                end)
+            }
+        })
+    end
+    
+    -- Add "New Profile" button
+    table.insert(rows, {
+        type = ui.TYPE.Container,
+        props = {
+            backgroundColor = {0.1, 0.2, 0.1, 0.8},
+            borderColor = {0.2, 0.4, 0.2, 1},
+            borderSize = 1,
+            padding = 8,
+            margin = {top = 10},
+            autoSize = true
+        },
+        content = ui.content({
+            {
+                type = ui.TYPE.Text,
+                props = {
+                    text = "+ Add New Profile",
+                    textColor = CLICKABLE_TEXT_COLOR,
+                    textSize = 14
+                }
+            }
+        }),
+        events = {
+            mouseClick = c(function()
+                -- Create new default profile
+                local newProfile = {
+                    name = "New Profile " .. (#profiles + 1),
+                    key = 'x',
+                    shift = false,
+                    ctrl = false,
+                    alt = false,
+                    radius = 1000,
+                    filters = {
+                        items = true,
+                        containers = true
+                    },
+                    modeToggle = false
+                }
+                table.insert(profiles, newProfile)
+                selectedProfileIndex = #profiles
+                saveProfiles()
+                I.TwentyTwentyObjects.refreshUI()
+            end),
+            mouseEnter = c(function(e)
+                e.target.props.backgroundColor = {0.2, 0.3, 0.2, 1}
+                e.target.props.borderColor = {0.3, 0.5, 0.3, 1}
+                e.target:update()
+            end),
+            mouseLeave = c(function(e)
+                e.target.props.backgroundColor = {0.1, 0.2, 0.1, 0.8}
+                e.target.props.borderColor = {0.2, 0.4, 0.2, 1}
+                e.target:update()
+            end)
+        }
+    })
+    
+    return {
+        type = ui.TYPE.Flex,
+        props = {
+            vertical = true,
+            arrange = ui.ALIGNMENT.Start,
+            minWidth = 200
+        },
+        content = ui.content(rows)
+    }
+end
+
+-- Main layout
+local function createMainLayout()
+    print("[TTO DEBUG SETTINGS_IMPROVED] createMainLayout() called.")
+    return {
+        type = ui.TYPE.Container,
+        props = { relativeSize = v2(1,1), anchor = v2(0,0) },
+        content = ui.content({
+            {
+                type = ui.TYPE.Flex,
+                props = { vertical = true, arrange = ui.ALIGNMENT.Start, relativeSize = v2(1,1) },
+                content = ui.content({
+                    -- Title
+                    { 
+                        type = ui.TYPE.Text, 
+                        props = { 
+                            text = "🔍 Interactable Highlight Settings", 
+                            textSize = 24, 
+                            textAlign = ui.ALIGNMENT.Center,
+                            margin = {bottom = 10}
+                        } 
+                    },
+                    -- Tab bar with proper container
+                    {
+                        type = ui.TYPE.Container,
+                        props = {
+                            backgroundColor = {0.05, 0.05, 0.05, 0.3},
+                            borderColor = {0.3, 0.3, 0.3, 1},
+                            borderSize = {0, 0, 2, 0}, -- Bottom border only
+                            margin = {bottom = 5}
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Flex, 
+                                props = { 
+                                    horizontal = true,
+                                    arrange = ui.ALIGNMENT.Start
+                                }, 
+                                content = ui.content(map(TABS or {}, function(tab) return createTabButton(tab, currentTab == tab.id) end))
+                            }
+                        })
+                    },
+                    -- Tab content with proper scrolling and text wrapping
+                    { 
+                        type = ui.TYPE.Container, 
+                        props = { 
+                            scrollable = true,
+                            relativeSize = v2(1, 1),
+                            padding = 15,
+                            backgroundColor = {0.05, 0.05, 0.05, 0.2}
+                        }, 
+                        content = ui.content({ 
+                            {
+                                type = ui.TYPE.Container,
+                                props = {
+                                    autoSize = true,
+                                    maxWidth = 800 -- Limit width to prevent horizontal scrolling
+                                },
+                                content = ui.content({ createTabContent() })
+                            }
+                        }) 
+                    }
                 })
             }
         })
@@ -1085,47 +1499,117 @@ local function createMainLayout()
 end
 
 -- Local function for the interface
-local function exposed_refreshUI() 
-    if settingsPage then
-        settingsPage.element.layout = createMainLayout()
-        settingsPage.element:update()
+local function exposed_refreshUI()
+    print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() called.")
+    if rootElement then
+        print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - Updating layout.")
+        rootElement.layout = createMainLayout()
+        rootElement:update()
+        print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - Layout updated.")
+    else
+        print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - rootElement is nil (page not created yet?).")
     end
 end
 
 -- Initialize
 local function onInit()
-    -- Placeholder settings page until data arrives from Global
-    settingsPage = ui.registerSettingsPage({
-        key = 'TwentyTwentyObjects',
-        l10n = 'TwentyTwentyObjects',
-        name = 'Interactable Highlight',
-        element = ui.create({
-            type = ui.TYPE.Text,
-            props = { text = 'Loading settings...', textSize = 16 }
+    print("[TTO DEBUG SETTINGS_IMPROVED] onInit() (Full UI) called.")
+    print("[TTO DEBUG SETTINGS_IMPROVED] Registering settings page (Full UI)...")
+
+    -- Create a placeholder element now so we can update it later regardless of API internals
+    rootElement = ui.create({
+        type = ui.TYPE.Container,
+        props = { relativeSize = v2(1,1), anchor = v2(0,0)},
+        content = ui.content({
+            {
+                type = ui.TYPE.Text,
+                props = { text = 'Loading full settings UI...', textSize = 16 }
+            }
         })
     })
+
+    ui.registerSettingsPage({
+        key  = 'TwentyTwentyObjects',
+        l10n = 'TwentyTwentyObjects',
+        name = 'TwentyTwentyObjects',
+        element = rootElement
+    })
+    print("[TTO DEBUG SETTINGS_IMPROVED] Settings page registered (Full UI).")
 end
 
 -- function called from Global script once storage ready
-local function refresh(data)
-    if not data then return end
+local function refresh(data) -- This is the ACTUAL refresh for the full UI
+    print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() function called.")
+    if not data then 
+        print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() called with no data, returning.")
+        return 
+    end
     profiles           = data.profiles or {}
-    appearanceSettings = data.appearance or {}
-    performanceSettings= data.performance or {}
-    generalSettings    = data.general or {}
-    if settingsPage then
-        settingsPage.element.layout = createMainLayout()
-        settingsPage.element:update()
+    appearanceSettings = data.appearance or {
+        labelStyle = "native",
+        textSize = "medium",
+        lineStyle = "straight",
+        lineColor = {r=0.8, g=0.8, b=0.8, a=0.7},
+        backgroundColor = {r=0, g=0, b=0, a=0.5},
+        showIcons = true,
+        enableAnimations = true,
+        animationSpeed = "normal",
+        fadeDistance = true,
+        groupSimilar = false,
+        opacity = 0.8
+    }
+    performanceSettings= data.performance or {
+        maxLabels = 20,
+        updateInterval = "medium",
+        scanInterval = "medium",
+        distanceCulling = true,
+        cullDistance = 2000,
+        occlusionChecks = "basic",
+        smartGrouping = false
+    }
+    generalSettings    = data.general or {
+        debug = false
+    }
+    selectedProfileIndex = 1 -- Reset selected index
+    currentTab = "presets" -- Reset to default tab
+
+    if not storage_module then print("[TTO ERROR] storage_module is nil in refresh!") end
+    if not logger_module then print("[TTO ERROR] logger_module is nil in refresh!") end
+    
+    print("[TTO DEBUG SETTINGS_IMPROVED] Profiles count: " .. #profiles)
+    logger_module.init(generalSettings.debug) -- Ensure logger is using current debug state
+
+    if rootElement then
+        print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() - Updating main layout.")
+        exposed_refreshUI() -- This will call createMainLayout and update
+    else
+        print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() - rootElement is nil (page not initialized yet).")
+    end
+    print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() completed.")
+end
+
+local function handlePleaseRefreshSettingsEvent(eventData)
+    print("[TTO DEBUG SETTINGS_IMPROVED] Received PleaseRefreshSettingsEvent (Full UI target).")
+    if eventData and eventData.dataToRefreshWith then
+        refresh(eventData.dataToRefreshWith) -- Call the actual refresh function
+    else
+        print("[TTO DEBUG SETTINGS_IMPROVED] PleaseRefreshSettingsEvent (Full UI target) received no dataToRefreshWith.")
+        refresh(nil) 
     end
 end
 
+print("[TTO DEBUG SETTINGS_IMPROVED] Defining interface and event handlers (Full UI)...")
+
 return {
-    interfaceName = 'TTO_Menu',
+    interfaceName = 'TwentyTwentyObjects', -- Must match the name used in I.TwentyTwentyObjects.* calls
     interface = { 
-        refresh = refresh,
+        refresh = refresh, -- Actual refresh
         refreshUI = exposed_refreshUI
     },
     engineHandlers = {
         onInit = onInit
+    },
+    eventHandlers = {
+        PleaseRefreshSettingsEvent = handlePleaseRefreshSettingsEvent
     }
 }

@@ -71,17 +71,15 @@ function M.getProfiles()
     if not currentModConfig then return {} end
 
     local profilesData = currentModConfig:get('profiles')
-    if type(profilesData) == 'table' then
+    -- OpenMW storage API returns nil or a valid table-like userdata object
+    -- Just like PCP, we don't need to check the type - if it's not nil, it's valid
+    if profilesData ~= nil then
         return profilesData
     else
-        if profilesData ~= nil then
-            print('[TTO Storage WARN] Profiles data in storage was not a table (type: ' .. type(profilesData) .. '). Resetting to empty table.')
-        else
-            print('[TTO Storage INFO] Profiles not found or invalid. Initializing with an empty table.')
-        end
-        local newProfiles = {}
-        currentModConfig:set('profiles', newProfiles) 
-        return newProfiles
+        print('[TTO Storage INFO] Profiles key not found or nil. Returning empty table.')
+        -- Do NOT attempt to write back from here if called from a non-Global context.
+        -- Initialization/healing of this key is the Global script's responsibility.
+        return {}
     end
 end
 
@@ -109,20 +107,12 @@ function M.initializeDefaults()
         return true -- Act as if done, to not block, but logged failure
     end
 
-    if not M.hasProfiles() then 
-        print("[TTO Storage INFO] initializeDefaults: No profiles found, setting defaults.")
-        local defaults = {
-            {
-                name = "All Items (Default)", key = 'x', shift = true, ctrl = false, alt = false, radius = 1500,
-                filters = { items = true, containers = true, weapons = true, armor = true, clothing = true, books = true, ingredients = true, misc = true },
-                modeToggle = false
-            },
-            {
-                name = "NPCs & Creatures", key = 'p', shift = true, ctrl = false, alt = false, radius = 300,
-                filters = { npcs = true, creatures = true }, modeToggle = true
-            }
-        }
-        M.setProfiles(defaults)
+    -- Check if profiles key exists at all
+    local profilesData = currentModConfig:get('profiles')
+    if profilesData == nil then 
+        print("[TTO Storage INFO] initializeDefaults: No profiles key found, initializing with empty profile list.")
+        -- Initialize with empty array - OpenMW storage needs this initial set
+        currentModConfig:set('profiles', {})
         return true
     end
     return false
