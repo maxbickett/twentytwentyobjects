@@ -52,6 +52,11 @@ function M.createNativeLabel(text, options)
         textSize = textSize * options.distanceScale
     end
     
+    -- Debug logging
+    local logger = require('scripts.TwentyTwentyObjects.util.logger')
+    logger.debug(string.format('Creating label: text="%s", pos=%s, alpha=%s', 
+        text, tostring(options.position), tostring(options.alpha)))
+    
     -- Create the tooltip-style container
     local labelLayout = {
         layer = 'HUD',
@@ -72,8 +77,8 @@ function M.createNativeLabel(text, options)
                 vertical = NATIVE_STYLE.padding.vertical
             },
             
-            -- Visibility
-            visible = options.visible ~= false,
+            -- Visibility - start visible for debugging
+            visible = true,  -- Always visible for now
             alpha = options.alpha or 1.0
         },
         content = ui.content({
@@ -90,7 +95,9 @@ function M.createNativeLabel(text, options)
         })
     }
     
-    return ui.create(labelLayout)
+    local element = ui.create(labelLayout)
+    logger.debug(string.format('Label created: %s', tostring(element)))
+    return element
 end
 
 -- Create label with connecting line to object

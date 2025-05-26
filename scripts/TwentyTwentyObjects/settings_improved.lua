@@ -943,8 +943,8 @@ createCheckbox = function(label, checked, onChange)
             {
                 type = ui.TYPE.Container,
                 props = {
-                    backgroundColor = checked and {0.2, 0.4, 0.2, 1} or {0.2, 0.2, 0.2, 1},
-                    borderColor = {0.4, 0.4, 0.4, 1},
+                    backgroundColor = checked and col(0.2, 0.4, 0.2, 1) or col(0.2, 0.2, 0.2, 1),
+                    borderColor = col(0.4, 0.4, 0.4, 1),
                     borderSize = 1,
                     width = 18,
                     height = 18,

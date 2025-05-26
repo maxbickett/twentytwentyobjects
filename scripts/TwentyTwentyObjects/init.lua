@@ -176,13 +176,11 @@ print("[TTO DEBUG] INIT.LUA: Top-level setup finished.")
 
 -- Helper: Send event to player (rendering scripts)
 local function sendToPlayerRenderer(event, data)
-    local player = world.players[1]
-    if player then
-        player:sendEvent(event, data) -- Event names TTO_ShowHighlights, TTO_HideHighlights
-        logger_module.debug(string.format('[Global] Sent event %s to player renderer with data: %s', event, logger_module.table and logger_module.table('eventData',data) or tostring(data)))
-    else
-        logger_module.error('[Global] No player found to send event to renderer')
+    -- To send events to PLAYER scripts from GLOBAL, we need to iterate through players
+    for _, player in ipairs(world.players) do
+        player:sendEvent(event, data)
     end
+    logger_module.debug(string.format('[Global] Sent event %s to all player scripts with data: %s', event, tostring(data)))
 end
 
 -- Event handler for key events from HotkeyListener

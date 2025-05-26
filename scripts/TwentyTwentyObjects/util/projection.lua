@@ -10,27 +10,34 @@ local M = {}
 -- Cache screen size to avoid repeated lookups
 local screenSize = ui.screenSize()
 
+-- Logger for debugging
+local logger = require('scripts.TwentyTwentyObjects.util.logger')
+
 -- Update cached screen size (call on resolution change)
 function M.updateScreenSize()
     screenSize = ui.screenSize()
+    logger.debug(string.format('Screen size updated: %dx%d', screenSize.x, screenSize.y))
 end
 
 -- Convert world position to screen coordinates
 -- Returns vector2 or nil if position is behind camera
 function M.worldToScreen(worldPos)
-    -- Simplified implementation that just places labels at fixed screen positions
-    -- This is temporary until we can implement proper 3D projection
+    -- Use OpenMW's camera projection function
+    local viewportPos = camera.worldToViewportVector(worldPos)
     
-    -- For now, just return a position in the center of the screen with some offset
-    -- based on the world position to give some variation
-    local hash = (worldPos.x * 73 + worldPos.y * 97 + worldPos.z * 113) % 1000
-    local offsetX = (hash % 400) - 200  -- -200 to 200
-    local offsetY = ((hash * 7) % 300) - 150  -- -150 to 150
+    -- Check if behind camera (negative z means behind)
+    if viewportPos.z < 0 then
+        return nil
+    end
     
-    return util.vector2(
-        screenSize.x / 2 + offsetX,
-        screenSize.y / 2 + offsetY
-    )
+    -- Update screen size if needed
+    if not screenSize or screenSize.x == 0 then
+        M.updateScreenSize()
+    end
+    
+    -- The x and y components are already in screen coordinates!
+    -- (0,0) is top-left corner of screen
+    return util.vector2(viewportPos.x, viewportPos.y)
 end
 
 -- Get the top-center position of an object's bounding box

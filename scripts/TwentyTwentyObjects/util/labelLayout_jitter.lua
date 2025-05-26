@@ -40,8 +40,8 @@ local CONFIG = {
     },
     
     -- Line appearance
-    LINE_COLOR = col(0.5, 0.5, 0.4, 0.4),  -- Faded yellow-gray
-    LINE_THICKNESS = 1,
+    LINE_COLOR = col(0.8, 0.8, 0.6, 0.8),  -- More visible yellow-white
+    LINE_THICKNESS = 2,  -- Thicker line for visibility
     
     -- Jitter parameters
     JITTER_ITERATIONS = 10,  -- Max attempts to find good position

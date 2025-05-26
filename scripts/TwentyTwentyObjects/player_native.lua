@@ -176,6 +176,8 @@ local function scanAndCreateLabels(profile)
         gatherObjects(nearby.activators)
     end
     
+    logger_module.debug(string.format('Found %d candidates before sorting', #candidates))
+    
     -- Sort by priority
     table.sort(candidates, function(a, b)
         return a.priority > b.priority
@@ -187,6 +189,8 @@ local function scanAndCreateLabels(profile)
         toProcess[i] = candidates[i]
     end
     
+    logger_module.debug(string.format('Processing %d objects (max: %d)', #toProcess, CONFIG.MAX_LABELS))
+    
     -- Calculate screen positions and prepare for jittering
     labelLayout.solver:clear()
     local labelDataList = {}
@@ -195,8 +199,12 @@ local function scanAndCreateLabels(profile)
         local worldPos = projection.getObjectLabelPosition(candidate.object)
         local screenPos = projection.worldToScreen(worldPos)
         
+        logger_module.debug(string.format('Object at world pos: %s, screen pos: %s', tostring(worldPos), tostring(screenPos)))
+        
         if screenPos and projection.isOnScreen(screenPos, 50) then
             local name = getObjectName(candidate.object)
+            
+            logger_module.debug(string.format('Adding label for: %s', name))
             
             -- Estimate label size
             local labelWidth = #name * 7  -- Approximate character width
@@ -215,22 +223,32 @@ local function scanAndCreateLabels(profile)
                     priority = candidate.priority
                 }
             )
+        else
+            logger_module.debug('Object not on screen or screenPos is nil')
         end
     end
     
     -- Solve positions with jittering
     local solved = labelLayout.solver:solve()
     
+    logger_module.debug(string.format('Solver returned %d solutions', #solved))
+    
     -- Create labels and lines
     for _, solution in ipairs(solved) do
         local data = solution.data
+        
+        logger_module.debug(string.format('Creating label at pos: %s', tostring(solution.labelPos)))
         
         -- Create label at solved position
         local label = labelRenderer.createNativeLabel(data.name, {
             position = solution.labelPos,
             distanceScale = projection.getDistanceScale(data.distance),
-            alpha = 0  -- Start invisible for fade-in
+            alpha = 1.0  -- Start fully visible for debugging
         })
+        
+        if not label then
+            logger_module.error('Failed to create label!')
+        end
         
         -- Create connecting line if needed
         local line = nil
@@ -243,11 +261,11 @@ local function scanAndCreateLabels(profile)
             )
             
             if lineStyle == "solid" then
-                line = labelLayout.createConnectingLine(solution.labelPos, solution.objectPos)
+                line = labelLayout.createConnectingLine(solution.objectPos, solution.labelPos)
             elseif lineStyle == "dotted" then
-                line = labelLayout.createDottedLine(solution.labelPos, solution.objectPos)
+                line = labelLayout.createDottedLine(solution.objectPos, solution.labelPos)
             elseif lineStyle == "curved" then
-                line = labelLayout.createCurvedLine(solution.labelPos, solution.objectPos, 15)
+                line = labelLayout.createCurvedLine(solution.objectPos, solution.labelPos, 15)
             end
         end
         
@@ -260,7 +278,7 @@ local function scanAndCreateLabels(profile)
             line = line,
             labelPos = solution.labelPos,
             objectPos = solution.objectPos,
-            alpha = 0,
+            alpha = 1.0,  -- Start fully visible
             targetAlpha = 1,
             showLine = solution.showLine
         })
@@ -321,8 +339,13 @@ local function updateLabels(dt)
         
         -- Update label UI
         if labelData.label then
-            labelData.label.layout.props.alpha = labelData.alpha
-            labelData.label.layout.props.visible = labelData.visible and labelData.alpha > 0
+            if labelData.label.layout and labelData.label.layout.props then
+                labelData.label.layout.props.alpha = labelData.alpha
+                labelData.label.layout.props.visible = labelData.visible and labelData.alpha > 0
+                labelData.label:update()
+            else
+                logger_module.error('Label has no layout or props!')
+            end
         end
     end
     
@@ -345,8 +368,8 @@ local function updateLabels(dt)
                 if not labelData.line then
                     -- Create new line
                     labelData.line = labelLayout.createConnectingLine(
-                        solution.labelPos,
-                        solution.objectPos
+                        solution.objectPos,
+                        solution.labelPos
                     )
                 else
                     -- Update existing line
@@ -355,8 +378,8 @@ local function updateLabels(dt)
                         labelData.line:destroy()
                     end
                     labelData.line = labelLayout.createConnectingLine(
-                        solution.labelPos,
-                        solution.objectPos
+                        solution.objectPos,
+                        solution.labelPos
                     )
                 end
                 
@@ -416,12 +439,18 @@ end
 
 -- Event handlers
 local function onShowHighlights(eventData)
+    logger_module.info('onShowHighlights called')
+    if not eventData or not eventData.profile then
+        logger_module.error('Invalid eventData in onShowHighlights')
+        return
+    end
     currentProfile = eventData.profile
     occlusion.newFrame()  -- Reset occlusion cache
     scanAndCreateLabels(currentProfile)
 end
 
 local function onHideHighlights(eventData)
+    logger_module.info('onHideHighlights called')
     -- Fade out all labels
     for _, labelData in ipairs(activeLabels) do
         labelData.targetAlpha = 0
@@ -458,11 +487,11 @@ local function onLoad()
     -- storage_module.init(engine_storage) -- No longer needed here
 
     generalSettings = storage_module.get('general', { debug = false })
-    logger_module.init(generalSettings.debug)
+    logger_module.init(true)  -- Force debug on for testing
     
     labelRenderer.init()
     projection.updateScreenSize()
-    logger_module.debug('Native player script loaded')
+    logger_module.info('Native player script loaded with debug enabled')
 end
 
 logger_module.info('Twenty Twenty Objects native player script (player_native.lua) parsed.')
