@@ -7,17 +7,20 @@ local core = require('openmw.core')
 
 local M = {}
 
+-- Helper for creating colors
+local col = util.color.rgb
+
 -- Morrowind's native tooltip style constants
 local NATIVE_STYLE = {
     -- Background color: dark blue-gray (matches MW tooltips)
-    backgroundColor = {0.075, 0.09, 0.11, 0.95},  -- Nearly opaque
+    backgroundColor = col(0.075, 0.09, 0.11, 0.95),  -- Nearly opaque
     
     -- Border color: lighter blue-gray 
-    borderColor = {0.15, 0.18, 0.22, 1.0},
+    borderColor = col(0.15, 0.18, 0.22, 1.0),
     borderSize = 1,
     
     -- Text color: yellowish white (MW's signature text)
-    textColor = {0.87, 0.87, 0.76, 1.0},
+    textColor = col(0.87, 0.87, 0.76, 1.0),
     
     -- Padding matches vanilla tooltips
     padding = {
@@ -104,7 +107,7 @@ function M.createLabelWithLine(text, screenPos, objectPos, options)
         type = ui.TYPE.Container,
         props = {
             -- Line is drawn as a thin stretched box
-            backgroundColor = {0.5, 0.5, 0.5, 0.3},  -- Semi-transparent gray
+            backgroundColor = col(0.5, 0.5, 0.5, 0.3),  -- Semi-transparent gray
             
             -- Position at object point
             position = objectPos,
@@ -216,7 +219,7 @@ function M.addHealthBar(labelElement, healthPercent)
         type = ui.TYPE.Container,
         props = {
             -- Dark background
-            backgroundColor = {0.1, 0.0, 0.0, 0.8},
+            backgroundColor = col(0.1, 0.0, 0.0, 0.8),
             size = util.vector2(60, 4),
             position = util.vector2(0, labelElement.layout.size.y + 2),
             
@@ -229,7 +232,7 @@ function M.addHealthBar(labelElement, healthPercent)
                 type = ui.TYPE.Container,
                 props = {
                     -- Red health fill
-                    backgroundColor = {0.8, 0.1, 0.1, 1.0},
+                    backgroundColor = col(0.8, 0.1, 0.1, 1.0),
                     size = util.vector2(58 * healthPercent, 2),
                     position = util.vector2(1, 1)
                 }

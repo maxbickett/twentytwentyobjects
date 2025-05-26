@@ -6,6 +6,19 @@ local ui = require('openmw.ui')
 
 local M = {}
 
+-- Helper for creating colors
+local col = util.color.rgb
+
+-- Helper function to normalize a vector
+local function normalizeVector(vec)
+    local len = vec:length()
+    if len > 0 then
+        return vec / len
+    else
+        return vec
+    end
+end
+
 -- Configuration for jittering behavior
 local CONFIG = {
     -- Minimum distance between labels
@@ -27,7 +40,7 @@ local CONFIG = {
     },
     
     -- Line appearance
-    LINE_COLOR = {0.5, 0.5, 0.4, 0.4},  -- Faded yellow-gray
+    LINE_COLOR = col(0.5, 0.5, 0.4, 0.4),  -- Faded yellow-gray
     LINE_THICKNESS = 1,
     
     -- Jitter parameters
@@ -96,7 +109,7 @@ function JitterSolver:solve()
                 -- Constrain to max distance from object
                 local distFromObject = (newPos - label1.objectPos):length()
                 if distFromObject > CONFIG.MAX_LABEL_DISTANCE then
-                    local dir = (newPos - label1.objectPos):normalized()
+                    local dir = normalizeVector(newPos - label1.objectPos)
                     newPos = label1.objectPos + dir * CONFIG.MAX_LABEL_DISTANCE
                 end
                 
@@ -197,12 +210,12 @@ function JitterSolver:calculateRepulsion(label1, label2)
             return util.vector2(math.random() - 0.5, math.random() - 0.5) * CONFIG.FORCE_STRENGTH
         else
             -- Push away from each other
-            return delta:normalized() * CONFIG.FORCE_STRENGTH
+            return normalizeVector(delta) * CONFIG.FORCE_STRENGTH
         end
     elseif distance < CONFIG.MIN_LABEL_SPACING then
         -- Mild repulsion for close labels
         local force = (CONFIG.MIN_LABEL_SPACING - distance) / CONFIG.MIN_LABEL_SPACING
-        return delta:normalized() * force * CONFIG.FORCE_STRENGTH * 0.5
+        return normalizeVector(delta) * force * CONFIG.FORCE_STRENGTH * 0.5
     end
     
     return util.vector2(0, 0)
@@ -267,7 +280,7 @@ function M.createDottedLine(startPos, endPos, dashLength)
     
     local delta = endPos - startPos
     local length = delta:length()
-    local direction = delta:normalized()
+    local direction = normalizeVector(delta)
     
     local dashes = {}
     local numDashes = math.floor(length / (dashLength * 2))
@@ -298,7 +311,7 @@ function M.createCurvedLine(startPos, endPos, curveAmount)
     
     -- Calculate control point for bezier curve
     local midPoint = (startPos + endPos) * 0.5
-    local perpendicular = util.vector2(-(endPos.y - startPos.y), endPos.x - startPos.x):normalized()
+    local perpendicular = normalizeVector(util.vector2(-(endPos.y - startPos.y), endPos.x - startPos.x))
     local controlPoint = midPoint + perpendicular * curveAmount
     
     -- Approximate bezier with line segments

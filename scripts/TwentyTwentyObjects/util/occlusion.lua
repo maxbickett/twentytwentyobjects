@@ -3,12 +3,24 @@
 
 local util = require('openmw.util')
 local nearby = require('openmw.nearby')
+local camera = require('openmw.camera')
+local types = require('openmw.types')
 
 local M = {}
 
 -- Cache for occlusion results (cleared each frame)
 local occlusionCache = {}
 local cacheFrame = 0
+
+-- Helper function to normalize a vector
+local function normalizeVector(vec)
+    local len = vec:length()
+    if len > 0 then
+        return vec / len
+    else
+        return vec
+    end
+end
 
 -- Simple visibility check using distance and doors
 function M.isObjectVisible(object, playerPos)
@@ -51,8 +63,8 @@ function M.quickDoorCheck(object, playerPos)
             
             if doorDist < objDist then
                 -- Door is closer than object, check if it blocks line of sight
-                local toObject = (object.position - playerPos):normalized()
-                local toDoor = (door.position - playerPos):normalized()
+                local toObject = normalizeVector(object.position - playerPos)
+                local toDoor = normalizeVector(door.position - playerPos)
                 
                 local dot = toObject:dot(toDoor)
                 if dot > 0.8 then  -- Door is roughly in the way

@@ -211,7 +211,8 @@ local function scanAndCreateLabels(profile)
                 {
                     object = candidate.object,
                     name = name,
-                    distance = candidate.distance
+                    distance = candidate.distance,
+                    priority = candidate.priority
                 }
             )
         end
@@ -238,7 +239,7 @@ local function scanAndCreateLabels(profile)
                 solution.labelPos,
                 solution.objectPos,
                 false,  -- Not grouped for now
-                data.priority
+                data.priority or 50  -- Default priority if missing
             )
             
             if lineStyle == "solid" then

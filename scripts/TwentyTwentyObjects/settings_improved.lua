@@ -45,8 +45,8 @@ end
 -- `auxUtil` is only needed for `map`; we don't keep a global reference if the require failed.
 
 -- UI Colors
-local DEFAULT_TEXT_COLOR    = col(0.94, 0.83, 0.60) -- Morrowind Gold/Yellow
-local HEADER_TEXT_COLOR     = col(1.0, 0.9, 0.75)  -- Slightly brighter for main headers
+local DEFAULT_TEXT_COLOR    = col(0.9, 0.9, 0.9)    -- Light gray for better visibility
+local HEADER_TEXT_COLOR     = col(1.0, 0.9, 0.75)   -- Slightly brighter for main headers
 local TAB_ACTIVE_BG_COLOR   = col(0.2, 0.3, 0.4)
 local TAB_INACTIVE_BG_COLOR = col(0.1, 0.1, 0.1, 0.5)
 local TAB_ACTIVE_TEXT_COLOR = col(1, 1, 1)
@@ -64,7 +64,7 @@ local PRESETS = {
         shows = "Items, Weapons, Armor, Containers",
         profile = {
             name = "Loot Hunter",
-            key = 'e', shift = false, ctrl = false, alt = false,
+            key = 'm', shift = false, ctrl = false, alt = false,
             radius = 1200,
             filters = {
                 items = true, weapons = true, armor = true, 
@@ -81,7 +81,7 @@ local PRESETS = {
         shows = "NPCs only",
         profile = {
             name = "NPC Tracker",
-            key = 'q', shift = false, ctrl = false, alt = false,
+            key = 'n', shift = false, ctrl = false, alt = false,
             radius = 800,
             filters = {npcs = true, creatures = false},
             modeToggle = true
@@ -94,7 +94,7 @@ local PRESETS = {
         shows = "All valuable items",
         profile = {
             name = "Thief's Eye",
-            key = 'z', shift = true, ctrl = false, alt = false,
+            key = 'b', shift = false, ctrl = false, alt = false,
             radius = 600,
             filters = {
                 items = true, weapons = true, armor = true,
@@ -110,7 +110,7 @@ local PRESETS = {
         shows = "NPCs, Creatures, Containers, Doors, Items",
         profile = {
             name = "Dungeon Delver",
-            key = 'x', shift = false, ctrl = false, alt = false,
+            key = 'v', shift = false, ctrl = false, alt = false,
             radius = 1500,
             filters = {
                 npcs = true, creatures = true,
@@ -452,7 +452,30 @@ local function createTabContent()
         if not profiles or #profiles == 0 then return {type=ui.TYPE.Text, props={text="No profiles yet.", textColor = DEFAULT_TEXT_COLOR}} end
         local profile = profiles[selectedProfileIndex]
         if not profile then return {type=ui.TYPE.Text, props={text="Selected profile not found.", textColor = DEFAULT_TEXT_COLOR}} end
-        return { type = ui.TYPE.Flex, props = { horizontal = true }, content = ui.content({ createProfileList(), createSettingsSection(profile) }) }
+        return { 
+            type = ui.TYPE.Flex, 
+            props = { 
+                horizontal = true,
+                arrange = ui.ALIGNMENT.Start
+            }, 
+            content = ui.content({ 
+                {
+                    type = ui.TYPE.Container,
+                    props = {
+                        minWidth = 200,
+                        margin = {right = 20}
+                    },
+                    content = ui.content({ createProfileList() })
+                },
+                {
+                    type = ui.TYPE.Container,
+                    props = {
+                        relativeSize = v2(1, 0)  -- Take remaining width
+                    },
+                    content = ui.content({ createSettingsSection(profile) })
+                }
+            }) 
+        }
     elseif currentTab == "appearance" then
         return createAppearanceSettings()
     elseif currentTab == "performance" then
@@ -474,7 +497,8 @@ createSettingsSection = function(profile)
         type = ui.TYPE.Flex,
         props = {
             vertical = true,
-            arrange = ui.ALIGNMENT.Start
+            arrange = ui.ALIGNMENT.Start,
+            maxWidth = 600  -- Prevent content from stretching too wide
         },
         content = ui.content({
             -- Hotkey display
@@ -489,59 +513,68 @@ createSettingsSection = function(profile)
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "Hotkey",
-                            textSize = 16,
-                            margin = {bottom = 10},
-                            textColor = HEADER_TEXT_COLOR
-                        }
-                    },
-                    {
                         type = ui.TYPE.Flex,
                         props = {
-                            horizontal = true,
+                            vertical = true,
                             arrange = ui.ALIGNMENT.Start
                         },
                         content = ui.content({
-                            createKeyDisplay(profile),
                             {
-                                type = ui.TYPE.Widget,
+                                type = ui.TYPE.Text,
                                 props = {
-                                    relativeSize = v2(1, 0)  -- Spacer that takes up remaining horizontal space
+                                    text = "Hotkey",
+                                    textSize = 16,
+                                    margin = {bottom = 10},
+                                    textColor = HEADER_TEXT_COLOR
                                 }
                             },
                             {
-                                type = ui.TYPE.Container,
+                                type = ui.TYPE.Flex,
                                 props = {
-                                    backgroundColor = {0.2, 0.2, 0.4, 1},
-                                    padding = {horizontal = 15, vertical = 8},
-                                    borderRadius = 4
+                                    horizontal = true,
+                                    arrange = ui.ALIGNMENT.Start
                                 },
                                 content = ui.content({
+                                    createKeyDisplay(profile),
                                     {
-                                        type = ui.TYPE.Text,
+                                        type = ui.TYPE.Widget,
                                         props = {
-                                            text = "Change Key",
-                                            textSize = 14,
-                                            textColor = CLICKABLE_TEXT_COLOR
+                                            relativeSize = v2(1, 0)  -- Spacer that takes up remaining horizontal space
+                                        }
+                                    },
+                                    {
+                                        type = ui.TYPE.Container,
+                                        props = {
+                                            backgroundColor = {0.2, 0.2, 0.4, 1},
+                                            padding = {horizontal = 15, vertical = 8},
+                                            borderRadius = 4
+                                        },
+                                        content = ui.content({
+                                            {
+                                                type = ui.TYPE.Text,
+                                                props = {
+                                                    text = "Change Key",
+                                                    textSize = 14,
+                                                    textColor = CLICKABLE_TEXT_COLOR
+                                                }
+                                            }
+                                        }),
+                                        events = {
+                                            mouseClick = c(function()
+                                                -- TODO: Implement key binding
+                                                print("[TTO DEBUG] Key binding not yet implemented")
+                                            end),
+                                            mouseEnter = c(function(e)
+                                                e.target.props.backgroundColor = HOVER_BG_COLOR
+                                                e.target:update()
+                                            end),
+                                            mouseLeave = c(function(e)
+                                                e.target.props.backgroundColor = {0.2, 0.2, 0.4, 1}
+                                                e.target:update()
+                                            end)
                                         }
                                     }
-                                }),
-                                events = {
-                                    mouseClick = c(function()
-                                        -- TODO: Implement key binding
-                                        print("[TTO DEBUG] Key binding not yet implemented")
-                                    end),
-                                    mouseEnter = c(function(e)
-                                        e.target.props.backgroundColor = HOVER_BG_COLOR
-                                        e.target:update()
-                                    end),
-                                    mouseLeave = c(function(e)
-                                        e.target.props.backgroundColor = {0.2, 0.2, 0.4, 1}
-                                        e.target:update()
-                                    end)
-                                }
+                                })
                             }
                         })
                     }
@@ -557,24 +590,33 @@ createSettingsSection = function(profile)
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "Basic Settings",
-                            textSize = 18,
-                            margin = {bottom = 10},
-                            textColor = HEADER_TEXT_COLOR
-                        }
-                    },
-                    -- Mode toggle
-                    createToggle("Hold to Show", not profile.modeToggle, function(value)
-                        profile.modeToggle = not value
-                        saveProfiles() -- Saves the entire 'profiles' table
-                    end),
-                    -- Range slider with visual indicator
-                    createRangeSlider("Detection Range", profile.radius, 100, 3000, function(value)
-                        profile.radius = value
-                        saveProfiles() -- Saves the entire 'profiles' table
-                    end)
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "Basic Settings",
+                                    textSize = 18,
+                                    margin = {bottom = 10},
+                                    textColor = HEADER_TEXT_COLOR
+                                }
+                            },
+                            -- Mode toggle
+                            createToggle("Hold to Show", not profile.modeToggle, function(value)
+                                profile.modeToggle = not value
+                                saveProfiles() -- Saves the entire 'profiles' table
+                            end),
+                            -- Range slider with visual indicator
+                            createRangeSlider("Detection Range", profile.radius, 100, 3000, function(value)
+                                profile.radius = value
+                                saveProfiles() -- Saves the entire 'profiles' table
+                            end)
+                        })
+                    }
                 })
             },
             
@@ -587,15 +629,24 @@ createSettingsSection = function(profile)
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "What to Highlight",
-                            textSize = 18,
-                            margin = {bottom = 10},
-                            textColor = HEADER_TEXT_COLOR
-                        }
-                    },
-                    createFilterCategories(profile.filters)
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "What to Highlight",
+                                    textSize = 18,
+                                    margin = {bottom = 10},
+                                    textColor = HEADER_TEXT_COLOR
+                                }
+                            },
+                            createFilterCategories(profile.filters)
+                        })
+                    }
                 })
             }
         })
@@ -747,22 +798,31 @@ createFilterCategories = function(filters)
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "📍 Characters",
-                            textSize = 16,
-                            textColor = HEADER_TEXT_COLOR, -- Use header for category
-                            margin = {bottom = 5}
-                        }
-                    },
-                    createCheckbox("NPCs", filters.npcs, function(v)
-                        filters.npcs = v
-                        saveProfiles() -- Saves the entire 'profiles' table
-                    end),
-                    createCheckbox("Creatures", filters.creatures, function(v)
-                        filters.creatures = v
-                        saveProfiles() -- Saves the entire 'profiles' table
-                    end)
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "📍 Characters",
+                                    textSize = 16,
+                                    textColor = HEADER_TEXT_COLOR, -- Use header for category
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            createCheckbox("NPCs", filters.npcs, function(v)
+                                filters.npcs = v
+                                saveProfiles() -- Saves the entire 'profiles' table
+                            end),
+                            createCheckbox("Creatures", filters.creatures, function(v)
+                                filters.creatures = v
+                                saveProfiles() -- Saves the entire 'profiles' table
+                            end)
+                        })
+                    }
                 })
             },
             
@@ -774,50 +834,61 @@ createFilterCategories = function(filters)
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "🎒 Items",
-                            textSize = 16,
-                            textColor = HEADER_TEXT_COLOR, -- Use header for category
-                            margin = {bottom = 5}
-                        }
-                    },
-                    createCheckbox("All Items", filters.items, function(v)
-                        filters.items = v
-                        if v then
-                            -- Enable all subtypes
-                            filters.weapons = true
-                            filters.armor = true
-                            filters.clothing = true
-                            filters.books = true
-                            filters.ingredients = true
-                            filters.misc = true
-                        end
-                        saveProfiles() -- Saves the entire 'profiles' table
-                        I.TwentyTwentyObjects.refreshUI()
-                    end),
-                    -- Indented subtypes
-                    {
-                        type = ui.TYPE.Container,
-                        props = {
-                            margin = {left = 20}
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
                         },
                         content = ui.content({
-                            createCheckbox("Weapons", filters.weapons, function(v)
-                                filters.weapons = v
-                                if not v then filters.items = false end
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "🎒 Items",
+                                    textSize = 16,
+                                    textColor = HEADER_TEXT_COLOR, -- Use header for category
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            createCheckbox("All Items", filters.items, function(v)
+                                filters.items = v
+                                if v then
+                                    -- Enable all subtypes
+                                    filters.weapons = true
+                                    filters.armor = true
+                                    filters.clothing = true
+                                    filters.books = true
+                                    filters.ingredients = true
+                                    filters.misc = true
+                                end
                                 saveProfiles() -- Saves the entire 'profiles' table
+                                I.TwentyTwentyObjects.refreshUI()
                             end),
-                            createCheckbox("Armor", filters.armor, function(v)
-                                filters.armor = v
-                                if not v then filters.items = false end
-                                saveProfiles() -- Saves the entire 'profiles' table
-                            end),
-                            createCheckbox("Books", filters.books, function(v)
-                                filters.books = v
-                                if not v then filters.items = false end
-                                saveProfiles() -- Saves the entire 'profiles' table
-                            end)
+                            -- Indented subtypes
+                            {
+                                type = ui.TYPE.Flex,
+                                props = {
+                                    vertical = true,
+                                    arrange = ui.ALIGNMENT.Start,
+                                    margin = {left = 20}
+                                },
+                                content = ui.content({
+                                    createCheckbox("Weapons", filters.weapons, function(v)
+                                        filters.weapons = v
+                                        if not v then filters.items = false end
+                                        saveProfiles() -- Saves the entire 'profiles' table
+                                    end),
+                                    createCheckbox("Armor", filters.armor, function(v)
+                                        filters.armor = v
+                                        if not v then filters.items = false end
+                                        saveProfiles() -- Saves the entire 'profiles' table
+                                    end),
+                                    createCheckbox("Books", filters.books, function(v)
+                                        filters.books = v
+                                        if not v then filters.items = false end
+                                        saveProfiles() -- Saves the entire 'profiles' table
+                                    end)
+                                })
+                            }
                         })
                     }
                 })
@@ -828,22 +899,31 @@ createFilterCategories = function(filters)
                 type = ui.TYPE.Container,
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "🏛️ World Objects",
-                            textSize = 16,
-                            textColor = HEADER_TEXT_COLOR, -- Use header for category
-                            margin = {bottom = 5}
-                        }
-                    },
-                    createCheckbox("Containers", filters.containers, function(v)
-                        filters.containers = v
-                        saveProfiles() -- Saves the entire 'profiles' table
-                    end),
-                    createCheckbox("Doors", filters.doors, function(v)
-                        filters.doors = v
-                        saveProfiles() -- Saves the entire 'profiles' table
-                    end)
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "🏛️ World Objects",
+                                    textSize = 16,
+                                    textColor = HEADER_TEXT_COLOR, -- Use header for category
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            createCheckbox("Containers", filters.containers, function(v)
+                                filters.containers = v
+                                saveProfiles() -- Saves the entire 'profiles' table
+                            end),
+                            createCheckbox("Doors", filters.doors, function(v)
+                                filters.doors = v
+                                saveProfiles() -- Saves the entire 'profiles' table
+                            end)
+                        })
+                    }
                 })
             }
         })
@@ -1203,30 +1283,39 @@ createHelpContent = function()
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "1. Go to Quick Start and choose a preset",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "2. Press the hotkey in-game to see labels",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "3. Customize in My Profiles tab",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9)
-                        }
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "1. Go to Quick Start and choose a preset",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "2. Press the hotkey in-game to see labels",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "3. Customize in My Profiles tab",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9)
+                                }
+                            }
+                        })
                     }
                 })
             },
@@ -1249,39 +1338,48 @@ createHelpContent = function()
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "• Hold mode: Labels show while key is held",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "• Toggle mode: Press once to show, again to hide",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "• Smaller radius = better performance",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "• Labels won't show through walls",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9)
-                        }
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• Hold mode: Labels show while key is held",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• Toggle mode: Press once to show, again to hide",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• Smaller radius = better performance",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• Labels won't show through walls",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9)
+                                }
+                            }
+                        })
                     }
                 })
             },
@@ -1303,30 +1401,39 @@ createHelpContent = function()
                 },
                 content = ui.content({
                     {
-                        type = ui.TYPE.Text,
+                        type = ui.TYPE.Flex,
                         props = {
-                            text = "• No labels? Check your filters and radius",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "• Too many labels? Reduce radius or filters",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9),
-                            margin = {bottom = 5}
-                        }
-                    },
-                    {
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = "• Can't see labels? Check Appearance settings",
-                            textSize = 14,
-                            textColor = col(0.9, 0.9, 0.9)
-                        }
+                            vertical = true,
+                            arrange = ui.ALIGNMENT.Start
+                        },
+                        content = ui.content({
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• No labels? Check your filters and radius",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• Too many labels? Reduce radius or filters",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9),
+                                    margin = {bottom = 5}
+                                }
+                            },
+                            {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = "• Can't see labels? Check Appearance settings",
+                                    textSize = 14,
+                                    textColor = col(0.9, 0.9, 0.9)
+                                }
+                            }
+                        })
                     }
                 })
             }
@@ -1344,7 +1451,8 @@ createProfileList = function()
                 autoSize = true,
                 margin = {bottom = 4},
                 backgroundColor = (i == selectedProfileIndex) and TAB_ACTIVE_BG_COLOR or {0,0,0,0},
-                padding = 4
+                padding = 8,
+                borderRadius = 4
             },
             content = ui.content({
                 {

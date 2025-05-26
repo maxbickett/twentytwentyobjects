@@ -6,6 +6,33 @@ local logger_module = require('scripts.TwentyTwentyObjects.util.logger')
 -- Forward declare generalSettings for logger
 local generalSettings = {}
 
+-- Helper: Create a clean, serializable copy of a profile
+local function cleanProfile(profile)
+    if not profile then return nil end
+    return {
+        name = profile.name or "",
+        key = profile.key or "",
+        shift = profile.shift or false,
+        ctrl = profile.ctrl or false,
+        alt = profile.alt or false,
+        radius = profile.radius or 1000,
+        modeToggle = profile.modeToggle or false,
+        filters = {
+            items = profile.filters and profile.filters.items or false,
+            weapons = profile.filters and profile.filters.weapons or false,
+            armor = profile.filters and profile.filters.armor or false,
+            clothing = profile.filters and profile.filters.clothing or false,
+            books = profile.filters and profile.filters.books or false,
+            ingredients = profile.filters and profile.filters.ingredients or false,
+            misc = profile.filters and profile.filters.misc or false,
+            npcs = profile.filters and profile.filters.npcs or false,
+            creatures = profile.filters and profile.filters.creatures or false,
+            containers = profile.filters and profile.filters.containers or false,
+            doors = profile.filters and profile.filters.doors or false
+        }
+    }
+end
+
 -- Helper: Check if a key event matches a profile's hotkey
 local function isProfileHotkey(profile, keyEvent)
     if not profile or not profile.key or not keyEvent or not keyEvent.symbol then
@@ -32,7 +59,8 @@ local function onKeyPress(keyEvent)
     for _, profile in ipairs(currentProfiles) do
         if isProfileHotkey(profile, keyEvent) then
             -- logger_module.debug("[HotkeyListener] Matched profile: " .. profile.name)
-            core_module.sendGlobalEvent("TTO_GlobalKeyEvent", { eventType = "press", profile = profile, key = keyEvent })
+            local cleanedProfile = cleanProfile(profile)
+            core_module.sendGlobalEvent("TTO_GlobalKeyEvent", { eventType = "press", profile = cleanedProfile })
             return -- Process only the first matched profile
         end
     end
@@ -49,7 +77,8 @@ local function onKeyRelease(keyEvent)
     for _, profile in ipairs(currentProfiles) do
         if isProfileHotkey(profile, keyEvent) then
             -- logger_module.debug("[HotkeyListener] Matched profile for release: " .. profile.name)
-            core_module.sendGlobalEvent("TTO_GlobalKeyEvent", { eventType = "release", profile = profile, key = keyEvent })
+            local cleanedProfile = cleanProfile(profile)
+            core_module.sendGlobalEvent("TTO_GlobalKeyEvent", { eventType = "release", profile = cleanedProfile })
             return -- Process only the first matched profile
         end
     end
