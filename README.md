@@ -62,15 +62,11 @@ TwentyTwentyObjects/
 └── scripts/
     └── TwentyTwentyObjects/
         ├── init.lua
-        ├── player.lua
         ├── player_native.lua
-        ├── player_optimized.lua
         ├── settings_improved.lua
         ├── hotkeyListener.lua
         └── util/
-            ├── labelLayout.lua
             ├── labelLayout_jitter.lua
-            ├── labelRenderer.lua
             ├── labelRenderer_native.lua
             ├── logger.lua
             ├── occlusion.lua
@@ -132,10 +128,10 @@ The system intelligently spreads labels out so they don't overlap, while maintai
 ### Performance Settings
 
 The **Performance** tab offers:
-- Quick presets: Potato, Balanced, or Ultra
-- Max labels limit (5-50)
-- Occlusion quality (hide labels behind walls)
+- Max labels limit (5-100)
+- Occlusion quality (hide labels behind walls) - enabled by default
 - Update rate control
+- Smart grouping toggle
 
 ### Tips
 

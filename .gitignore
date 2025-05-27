@@ -9,6 +9,7 @@ OPTIMIZATION_GUIDE.md
 UX_IMPROVEMENTS.md
 NATIVE_STYLE_NOTES.md
 VISUAL_EXAMPLES.md
+tips.md
 
 # Old/unused script versions
 scripts/InteractableHighlight/player.lua

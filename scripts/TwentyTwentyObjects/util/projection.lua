@@ -51,7 +51,7 @@ function M.worldToScreen(worldPos)
     -- The z component is the distance from camera to object
     -- If it's negative or very small, the object is behind or at the camera
     if viewportPos.z <= 1 then
-        logger.debug('Object behind camera (z <= 1)')
+        -- logger.debug('Object behind camera (z <= 1)')
         return nil
     end
     

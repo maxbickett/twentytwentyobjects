@@ -1,4 +1,4 @@
-print("[TTO DEBUG SETTINGS_IMPROVED] Script parsing started.")
+-- print("[TTO DEBUG SETTINGS_IMPROVED] Script parsing started.")
 -- settings_improved.lua: Enhanced menu script for Twenty Twenty Objects Mod
 -- Creates an improved configuration interface with quick-start presets
 
@@ -120,15 +120,15 @@ local PRESETS = {
 
 -- Tab definitions
 local TABS = {
-    {id = "presets", label = "Quick Start"},
-    {id = "profiles", label = "My Profiles"},
-    {id = "appearance", label = "Appearance"},
-    {id = "performance", label = "Performance"},
-    {id = "help", label = "Help"}
+    {id = "presets", label = "| Quick Start | "},
+    {id = "profiles", label = "My Profiles | "},
+    {id = "appearance", label = "Appearance | "},
+    {id = "performance", label = "Performance | "},
+    {id = "help", label = "Help | "}
 }
 
 -- Forward declare variables that will be initialized by the refresh event
-local profiles = {}
+local profiles = nil  -- Set to nil initially, will be populated when game loads
 local appearanceSettings = {
     labelStyle = "native",
     textSize = "medium",
@@ -143,7 +143,7 @@ local appearanceSettings = {
     opacity = 0.8
 }
 local performanceSettings = {
-    maxLabels = 20,
+    maxLabels = 100,
     updateInterval = "medium",
     scanInterval = "medium",
     distanceCulling = true,
@@ -430,34 +430,9 @@ end
 
 -- Create content based on current tab
 local function createTabContent()
-    print("[TTO DEBUG SETTINGS_IMPROVED] createTabContent() called for tab: " .. currentTab)
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] createTabContent() called for tab: " .. currentTab)
     if currentTab == "presets" then
         local presetCards = map(PRESETS or {}, createPresetCard)
-        -- Add a test button at the end
-        table.insert(presetCards, {
-            type = ui.TYPE.Container,
-            props = {
-                backgroundColor = {0.5, 0.2, 0.2, 1},
-                padding = 20,
-                margin = {top = 20},
-                autoSize = true
-            },
-            content = ui.content({
-                {
-                    type = ui.TYPE.Text,
-                    props = {
-                        text = "TEST BUTTON - Click Me!",
-                        textSize = 16,
-                        textColor = col(1, 1, 1)
-                    }
-                }
-            }),
-            events = {
-                mouseClick = c(function()
-                    print("[TTO DEBUG SETTINGS_IMPROVED] TEST BUTTON CLICKED!")
-                end)
-            }
-        })
         
         return { 
             type = ui.TYPE.Flex, 
@@ -639,7 +614,7 @@ createSettingsSection = function(profile)
                                             {
                                                 type = ui.TYPE.Text,
                                                 props = {
-                                                    text = "Change Key",
+                                                    text = "Change Key (click then press new key to set)",
                                                     textSize = 14,
                                                     textColor = CLICKABLE_TEXT_COLOR
                                                 }
@@ -648,11 +623,8 @@ createSettingsSection = function(profile)
                                         events = {
                                             mouseClick = c(function()
                                                 -- Start key binding mode
-                                                print("[TTO DEBUG] Change Key clicked!")
-                                                awaitingKeypress = true
-                                                keyBindingProfileIndex = selectedProfileIndex
-                                                print("[TTO DEBUG] awaitingKeypress = " .. tostring(awaitingKeypress))
-                                                print("[TTO DEBUG] keyBindingProfileIndex = " .. tostring(keyBindingProfileIndex))
+                                awaitingKeypress = true
+                                keyBindingProfileIndex = selectedProfileIndex
                                                 logger_module.debug("Starting key binding mode for profile " .. selectedProfileIndex)
                                                 I.TwentyTwentyObjects.refreshUI()
                                             end),
@@ -703,7 +675,7 @@ createSettingsSection = function(profile)
                                 saveProfiles() -- Saves the entire 'profiles' table
                             end),
                             -- Range slider with visual indicator
-                            createRangeSlider("Detection Range", profile.radius, 100, 3000, function(value)
+                            createRangeSlider("Detection Range", profile.radius, 100, 10000, function(value)
                                 profile.radius = value
                                 saveProfiles() -- Saves the entire 'profiles' table
                             end)
@@ -1139,61 +1111,9 @@ createPerformanceSettings = function()
                 }
             },
             
-            -- Performance presets
-            {
-                type = ui.TYPE.Container,
-                props = {
-                    backgroundColor = {0.05, 0.05, 0.05, 0.5},
-                    padding = 15,
-                    margin = {bottom = 20},
-                    autoSize = true
-                },
-                content = ui.content({
-                    {
-                        type = ui.TYPE.Flex,
-                        props = {
-                            vertical = true,
-                            arrange = ui.ALIGNMENT.Start
-                        },
-                        content = ui.content({
-                            {
-                                type = ui.TYPE.Text,
-                                props = {
-                                    text = "Quick Settings",
-                                    textSize = 16,
-                                    margin = {bottom = 10},
-                                    textColor = HEADER_TEXT_COLOR
-                                }
-                            },
-                            {
-                                type = ui.TYPE.Flex,
-                                props = {
-                                    horizontal = true,
-                                    arrange = ui.ALIGNMENT.Start
-                                },
-                                content = ui.content({
-                                    createPerformancePreset("Potato", "low", performanceSettings.updateInterval == "low"),
-                                    createPerformancePreset("Balanced", "balanced", performanceSettings.updateInterval == "balanced"),
-                                    createPerformancePreset("Ultra", "high", performanceSettings.updateInterval == "high")
-                                })
-                            }
-                        })
-                    }
-                })
-            },
+
             
-            -- Advanced settings
-            {
-                type = ui.TYPE.Text,
-                props = {
-                    text = "Advanced Settings",
-                    textSize = 16,
-                    margin = {top = 20, bottom = 10},
-                    textColor = HEADER_TEXT_COLOR
-                }
-            },
-            
-            createRangeSlider("Max labels shown", performanceSettings.maxLabels, 5, 50, function(v)
+            createRangeSlider("Max labels shown", performanceSettings.maxLabels, 5, 100, function(v)
                 performanceSettings.maxLabels = v
                 savePerformanceSettings()
             end),
@@ -1593,7 +1513,61 @@ end
 
 -- Main layout
 local function createMainLayout()
-    print("[TTO DEBUG SETTINGS_IMPROVED] createMainLayout() called.")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] createMainLayout() called.")
+    
+    -- Check if we're in the main menu (no game loaded)
+    -- We check if we've received the refresh event from the global script
+    -- The global script only sends this event when a game is loaded
+    local isInMainMenu = (profiles == nil)
+    
+    if isInMainMenu then
+        return {
+            type = ui.TYPE.Container,
+            props = { relativeSize = v2(1,1), anchor = v2(0,0) },
+            content = ui.content({
+                {
+                    type = ui.TYPE.Flex,
+                    props = { 
+                        vertical = true, 
+                        arrange = ui.ALIGNMENT.Center,
+                        relativeSize = v2(1,1)
+                    },
+                    content = ui.content({
+                        {
+                            type = ui.TYPE.Text,
+                            props = {
+                                text = "TwentyTwentyObjects",
+                                textSize = 24,
+                                textAlign = ui.ALIGNMENT.Center,
+                                textColor = HEADER_TEXT_COLOR,
+                                margin = {bottom = 20}
+                            }
+                        },
+                        {
+                            type = ui.TYPE.Container,
+                            props = {
+                                backgroundColor = {0.1, 0.1, 0.1, 0.8},
+                                padding = 30,
+                                autoSize = true
+                            },
+                            content = ui.content({
+                                {
+                                    type = ui.TYPE.Text,
+                                    props = {
+                                        text = "Settings are only available in-game.\n\nPlease load a save to configure the mod.",
+                                        textSize = 16,
+                                        textAlign = ui.ALIGNMENT.Center,
+                                        textColor = DEFAULT_TEXT_COLOR,
+                                        multiline = true
+                                    }
+                                }
+                            })
+                        }
+                    })
+                }
+            })
+        }
+    end
     
     local mainContent = {
         type = ui.TYPE.Container,
@@ -1677,33 +1651,24 @@ end
 
 -- Local function for the interface
 local function exposed_refreshUI()
-    print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() called.")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() called.")
     if rootElement then
-        print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - Updating layout.")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - Updating layout.")
         rootElement.layout = createMainLayout()
         rootElement:update()
-        print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - Layout updated.")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - Layout updated.")
     else
-        print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - rootElement is nil (page not created yet?).")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] exposed_refreshUI() - rootElement is nil (page not created yet?).")
     end
 end
 
 -- Initialize
 local function onInit()
-    print("[TTO DEBUG SETTINGS_IMPROVED] onInit() (Full UI) called.")
-    print("[TTO DEBUG SETTINGS_IMPROVED] Registering settings page (Full UI)...")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] onInit() (Full UI) called.")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] Registering settings page (Full UI)...")
 
-    -- Create a placeholder element now so we can update it later regardless of API internals
-    rootElement = ui.create({
-        type = ui.TYPE.Container,
-        props = { relativeSize = v2(1,1), anchor = v2(0,0)},
-        content = ui.content({
-            {
-                type = ui.TYPE.Text,
-                props = { text = 'Loading full settings UI...', textSize = 16 }
-            }
-        })
-    })
+    -- Create the initial UI element
+    rootElement = ui.create(createMainLayout())
 
     ui.registerSettingsPage({
         key  = 'TwentyTwentyObjects',
@@ -1711,15 +1676,21 @@ local function onInit()
         name = 'TwentyTwentyObjects',
         element = rootElement
     })
-    print("[TTO DEBUG SETTINGS_IMPROVED] Settings page registered (Full UI).")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] Settings page registered (Full UI).")
 end
 
 -- Handle key press events for key binding
 local function onKeyPress(key)
+    -- Debug logging
+    logger_module.debug("onKeyPress called, awaitingKeypress = " .. tostring(awaitingKeypress))
+    
     if not awaitingKeypress then return end
+    
+    logger_module.debug("Key pressed: code = " .. tostring(key.code))
     
     -- Cancel on escape
     if key.code == input.KEY.Escape then
+        logger_module.debug("Escape pressed, cancelling key binding")
         awaitingKeypress = false
         keyBindingProfileIndex = nil
         I.TwentyTwentyObjects.refreshUI()
@@ -1728,6 +1699,7 @@ local function onKeyPress(key)
     
     -- Get the key name
     local keyName = input.getKeyName(key.code)
+    logger_module.debug("Key name: " .. tostring(keyName))
     if not keyName or keyName == "" then return end
     
     -- Check if it's a reserved key
@@ -1768,9 +1740,11 @@ end
 
 -- function called from Global script once storage ready
 local function refresh(data) -- This is the ACTUAL refresh for the full UI
-    print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() function called.")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() function called.")
     if not data then 
-        print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() called with no data, returning.")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() called with no data, returning.")
+        -- Even with no data, if refresh is called, we're in-game
+        profiles = {}  -- Set to empty table to indicate we're in-game
         return 
     end
     profiles           = data.profiles or {}
@@ -1788,7 +1762,7 @@ local function refresh(data) -- This is the ACTUAL refresh for the full UI
         opacity = 0.8
     }
     performanceSettings= data.performance or {
-        maxLabels = 20,
+        maxLabels = 100,
         updateInterval = "medium",
         scanInterval = "medium",
         distanceCulling = true,
@@ -1802,32 +1776,32 @@ local function refresh(data) -- This is the ACTUAL refresh for the full UI
     selectedProfileIndex = 1 -- Reset selected index
     currentTab = "presets" -- Reset to default tab
 
-    if not storage_module then print("[TTO ERROR] storage_module is nil in refresh!") end
-    if not logger_module then print("[TTO ERROR] logger_module is nil in refresh!") end
+    -- if not storage_module then print("[TTO ERROR] storage_module is nil in refresh!") end
+    -- if not logger_module then print("[TTO ERROR] logger_module is nil in refresh!") end
     
-    print("[TTO DEBUG SETTINGS_IMPROVED] Profiles count: " .. #profiles)
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] Profiles count: " .. #profiles)
     logger_module.init(generalSettings.debug) -- Ensure logger is using current debug state
 
     if rootElement then
-        print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() - Updating main layout.")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() - Updating main layout.")
         exposed_refreshUI() -- This will call createMainLayout and update
     else
-        print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() - rootElement is nil (page not initialized yet).")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() - rootElement is nil (page not initialized yet).")
     end
-    print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() completed.")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] ACTUAL refresh() completed.")
 end
 
 local function handlePleaseRefreshSettingsEvent(eventData)
-    print("[TTO DEBUG SETTINGS_IMPROVED] Received PleaseRefreshSettingsEvent (Full UI target).")
+    -- print("[TTO DEBUG SETTINGS_IMPROVED] Received PleaseRefreshSettingsEvent (Full UI target).")
     if eventData and eventData.dataToRefreshWith then
         refresh(eventData.dataToRefreshWith) -- Call the actual refresh function
     else
-        print("[TTO DEBUG SETTINGS_IMPROVED] PleaseRefreshSettingsEvent (Full UI target) received no dataToRefreshWith.")
+        -- print("[TTO DEBUG SETTINGS_IMPROVED] PleaseRefreshSettingsEvent (Full UI target) received no dataToRefreshWith.")
         refresh(nil) 
     end
 end
 
-print("[TTO DEBUG SETTINGS_IMPROVED] Defining interface and event handlers (Full UI)...")
+-- print("[TTO DEBUG SETTINGS_IMPROVED] Defining interface and event handlers (Full UI)...")
 
 return {
     interfaceName = 'TwentyTwentyObjects', -- Must match the name used in I.TwentyTwentyObjects.* calls

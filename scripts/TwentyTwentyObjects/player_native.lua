@@ -27,7 +27,7 @@ local generalSettings = {}
 local CONFIG = {
     UPDATE_INTERVAL = 0.033,      -- 30fps label updates
     SCAN_INTERVAL = 0.25,         -- Object rescan rate
-    MAX_LABELS = 30,              -- Maximum visible labels
+    MAX_LABELS = 100,             -- Maximum visible labels
     FADE_DURATION = 0.15,         -- Fade in/out time
     LINE_UPDATE_DELAY = 0.05      -- Slight delay for line updates (smoother)
 }
@@ -165,8 +165,8 @@ local function scanAndCreateLabels(profile)
                                 worldPos = worldPos,
                                 screenPos = screenPos
                             })
-                            logger_module.debug(string.format('Added candidate: %s at screen pos (%.1f, %.1f)', 
-                                getObjectName(obj), screenPos.x, screenPos.y))
+                            -- logger_module.debug(string.format('Added candidate: %s at screen pos (%.1f, %.1f)', 
+                            --     getObjectName(obj), screenPos.x, screenPos.y))
                         end
                     end
                 end
@@ -200,13 +200,17 @@ local function scanAndCreateLabels(profile)
         return a.priority > b.priority
     end)
     
+    -- Get max labels from performance settings
+    local performanceSettings = storage_module.get('performance', {maxLabels = 100})
+    local maxLabels = performanceSettings.maxLabels or CONFIG.MAX_LABELS
+    
     -- Limit to max labels
     local toProcess = {}
-    for i = 1, math.min(#candidates, CONFIG.MAX_LABELS) do
+    for i = 1, math.min(#candidates, maxLabels) do
         toProcess[i] = candidates[i]
     end
     
-    logger_module.debug(string.format('Processing %d objects (max: %d)', #toProcess, CONFIG.MAX_LABELS))
+    logger_module.debug(string.format('Processing %d objects (max: %d)', #toProcess, maxLabels))
     
     -- Calculate screen positions and prepare for jittering
     labelLayout.solver:clear()
@@ -217,12 +221,12 @@ local function scanAndCreateLabels(profile)
         local screenPos = candidate.screenPos
         local worldPos = candidate.worldPos
         
-        logger_module.debug(string.format('Object at world pos: %s, screen pos: %s', tostring(worldPos), tostring(screenPos)))
+        -- logger_module.debug(string.format('Object at world pos: %s, screen pos: %s', tostring(worldPos), tostring(screenPos)))
         
         if screenPos and projection.isOnScreen(screenPos, 50) then
             local name = getObjectName(candidate.object)
             
-            logger_module.debug(string.format('Adding label for: %s', name))
+            -- logger_module.debug(string.format('Adding label for: %s', name))
             
             -- Estimate label size
             local labelWidth = #name * 7  -- Approximate character width
@@ -255,7 +259,7 @@ local function scanAndCreateLabels(profile)
     for _, solution in ipairs(solved) do
         local data = solution.data
         
-        logger_module.debug(string.format('Creating label at pos: %s', tostring(solution.labelPos)))
+        -- logger_module.debug(string.format('Creating label at pos: %s', tostring(solution.labelPos)))
         
         -- Create label at solved position
         local label = labelRenderer.createNativeLabel(data.name, {
@@ -522,7 +526,7 @@ local function onLoad()
     -- storage_module.init(engine_storage) -- No longer needed here
 
     generalSettings = storage_module.get('general', { debug = false })
-    logger_module.init(true)  -- Force debug on for testing
+    logger_module.init(generalSettings.debug)  -- Use settings for debug mode
     
     labelRenderer.init()
     projection.updateScreenSize()
