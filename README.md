@@ -1,10 +1,12 @@
-# Twenty Twenty Objects for OpenMW
+# Twenty Twenty Objects for OpenMW (0.49+)
 
-You know how you can understand what things are without having to look at each one through a microscope?  Ever feel like Morrowind was making you look at the world through a long cardboard tube to see what is out there?  Have trouble picking the game back up after playing BG3
-
-Well, I developed this mod to let you see the names of objects wihtout having to hover your target over everything. It also has some pretty nift features to let you configure specifc hot keys to pop up specific item types at specific distances, so you're not always cluttered.
+I developed this mod to let you see the names of objects wihtout having to hover your target over everything. It also has some pretty nift features to let you configure specifc hot keys to pop up specific item types at specific distances, so you're not always cluttered.  Along the way I built some cool features that let you set multiple hotkeys and customize what kinds of objects show up and at what distance.
 
 This is a dynamic object highlighting mod for OpenMW 0.49+ that displays floating text labels above interactable objects when triggered by customizable hotkeys. Perfect for finding loot in dark dungeons, tracking NPCs in crowded cities, or spotting that elusive book on a cluttered shelf.
+
+I picked up Morrowind this weekend after a youtube video hit me in the nostalgia.  It was the first videogame world I fell in love with.  Back in 2008 I loved it so much that I got involved in creating a mod - the first thing I ever did in software (shoutout to the Less Generic NPC Project).  It has been 15 years since I played it, though, and one of the first things I noticed was how annoying it was to point my cursor at everything on every shelf.  So, I looked for a mod to fix it, and was surprised not to find one. Please, don't tell me if I should have looked harder. 
+
+Instead of playing the game, I spent the entire time coding.  I have work tomorrow, and I didn't even get to Balmora.  I hope that this makes someone else's game experience nicer. Create github issues if you see opportunities for improvement!  I know the settings UI is a bit nonstandard, I had to do some custom stuff and this is for all practical purposes my first mod.  
 
 ## Features
 
