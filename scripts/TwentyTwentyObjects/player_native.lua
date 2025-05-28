@@ -80,6 +80,20 @@ local function getObjectName(object)
         name = types.Book.record(object).name
     elseif objType == types.Ingredient then
         name = types.Ingredient.record(object).name
+    elseif objType == types.Apparatus then
+        name = types.Apparatus.record(object).name
+    elseif objType == types.Lockpick then
+        name = types.Lockpick.record(object).name
+    elseif objType == types.Probe then
+        name = types.Probe.record(object).name
+    elseif objType == types.Repair then
+        name = types.Repair.record(object).name
+    elseif objType == types.Potion then
+        name = types.Potion.record(object).name
+    elseif objType == types.Light then
+        name = types.Light.record(object).name
+    elseif objType == types.Static then
+        name = types.Static.record(object).name
     elseif objType == types.Miscellaneous then
         name = types.Miscellaneous.record(object).name
     elseif objType == types.Gold then
@@ -104,6 +118,7 @@ local function matchesFilters(object, filters)
     if objType == types.Container and filters.containers then return true end
     if objType == types.Door and filters.doors then return true end
     if objType == types.Activator and filters.activators then return true end
+    if objType == types.Static and filters.activators then return true end  -- Static objects under activators filter
     
     -- Items - check specific subtypes first
     if objType == types.Weapon and filters.weapons then return true end
@@ -111,6 +126,12 @@ local function matchesFilters(object, filters)
     if objType == types.Clothing and filters.clothing then return true end
     if objType == types.Book and filters.books then return true end
     if objType == types.Ingredient and filters.ingredients then return true end
+    if objType == types.Apparatus and filters.misc then return true end  -- Apparatus items under misc filter
+    if objType == types.Lockpick and filters.misc then return true end  -- Lockpick under misc filter
+    if objType == types.Probe and filters.misc then return true end  -- Probe under misc filter
+    if objType == types.Repair and filters.misc then return true end  -- Repair under misc filter
+    if objType == types.Potion and filters.misc then return true end  -- Potions under misc filter
+    if objType == types.Light and filters.misc then return true end  -- Lights under misc filter
     if objType == types.Miscellaneous and filters.misc then return true end
     if objType == types.Gold then return true end  -- Always show gold
     
@@ -121,6 +142,9 @@ local function matchesFilters(object, filters)
         -- or if their specific filter is also enabled
         if objType == types.Weapon or objType == types.Armor or 
            objType == types.Clothing or objType == types.Book or 
+           objType == types.Apparatus or objType == types.Lockpick or
+           objType == types.Probe or objType == types.Repair or
+           objType == types.Potion or objType == types.Light or
            objType == types.Miscellaneous then
             return true
         end
@@ -133,6 +157,9 @@ end
 -- Scan and create labels with jittering
 local function scanAndCreateLabels(profile)
     logger_module.info(string.format('Native scan with profile: %s', profile.name))
+    
+    -- Update and log screen size
+    projection.updateScreenSize()
     
     -- Clear existing
     clearAllLabels()
@@ -165,8 +192,15 @@ local function scanAndCreateLabels(profile)
                                 worldPos = worldPos,
                                 screenPos = screenPos
                             })
-                            -- logger_module.debug(string.format('Added candidate: %s at screen pos (%.1f, %.1f)', 
-                            --     getObjectName(obj), screenPos.x, screenPos.y))
+                            if generalSettings.debug then
+                                logger_module.debug(string.format('Added candidate: %s at screen pos (%.1f, %.1f)', 
+                                    getObjectName(obj), screenPos.x, screenPos.y))
+                            end
+                        end
+                    else
+                        if generalSettings.debug then
+                            logger_module.debug(string.format('Object %s filtered out - worldToScreen returned nil', 
+                                getObjectName(obj)))
                         end
                     end
                 end
@@ -191,6 +225,8 @@ local function scanAndCreateLabels(profile)
     end
     if profile.filters.activators then
         gatherObjects(nearby.activators)
+        -- Also gather statics if activators filter is on
+        gatherObjects(nearby.statics)
     end
     
     logger_module.debug(string.format('Found %d candidates before sorting', #candidates))
@@ -222,11 +258,17 @@ local function scanAndCreateLabels(profile)
         local worldPos = candidate.worldPos
         
         -- logger_module.debug(string.format('Object at world pos: %s, screen pos: %s', tostring(worldPos), tostring(screenPos)))
+        if generalSettings.debug then
+            logger_module.debug(string.format('Object at world pos: %s, screen pos: %s', tostring(worldPos), tostring(screenPos)))
+        end
         
-        if screenPos and projection.isOnScreen(screenPos, 50) then
+        if screenPos and projection.isOnScreen(screenPos, 300) then
             local name = getObjectName(candidate.object)
             
             -- logger_module.debug(string.format('Adding label for: %s', name))
+            if generalSettings.debug then
+                logger_module.debug(string.format('Adding label for: %s', name))
+            end
             
             -- Estimate label size
             local labelWidth = #name * 7  -- Approximate character width
@@ -246,20 +288,27 @@ local function scanAndCreateLabels(profile)
                 }
             )
         else
-            logger_module.debug('Object not on screen or screenPos is nil')
+            if generalSettings.debug then
+                logger_module.debug('Object not on screen or screenPos is nil')
+            end
         end
     end
     
     -- Solve positions with jittering
     local solved = labelLayout.solver:solve()
     
-    logger_module.debug(string.format('Solver returned %d solutions', #solved))
+    if generalSettings.debug then
+        logger_module.debug(string.format('Solver returned %d solutions', #solved))
+    end
     
     -- Create labels and lines
     for _, solution in ipairs(solved) do
         local data = solution.data
         
         -- logger_module.debug(string.format('Creating label at pos: %s', tostring(solution.labelPos)))
+        if generalSettings.debug then
+            logger_module.debug(string.format('Creating label at pos: %s', tostring(solution.labelPos)))
+        end
         
         -- Create label at solved position
         local label = labelRenderer.createNativeLabel(data.name, {
@@ -275,8 +324,10 @@ local function scanAndCreateLabels(profile)
         -- Create connecting line if needed
         local line = nil
         if solution.showLine then
-            logger_module.debug(string.format('Creating line for %s: objectPos=%s, labelPos=%s', 
-                data.name, tostring(solution.objectPos), tostring(solution.labelPos)))
+            if generalSettings.debug then
+                logger_module.debug(string.format('Creating line for %s: objectPos=%s, labelPos=%s', 
+                    data.name, tostring(solution.objectPos), tostring(solution.labelPos)))
+            end
             
             local lineStyle = labelLayout.getLineStyle(
                 solution.labelPos,
@@ -285,7 +336,9 @@ local function scanAndCreateLabels(profile)
                 data.priority or 50  -- Default priority if missing
             )
             
-            logger_module.debug(string.format('Line style: %s', lineStyle))
+            if generalSettings.debug then
+                logger_module.debug(string.format('Line style: %s', lineStyle))
+            end
             
             if lineStyle == "solid" then
                 line = labelLayout.createConnectingLine(solution.objectPos, solution.labelPos)
@@ -295,14 +348,18 @@ local function scanAndCreateLabels(profile)
                 line = labelLayout.createCurvedLine(solution.objectPos, solution.labelPos, 15)
             end
             
-            if line then
-                logger_module.debug('Line created successfully')
-            else
-                logger_module.debug('Line creation failed or returned nil')
+            if generalSettings.debug then
+                if line then
+                    logger_module.debug('Line created successfully')
+                else
+                    logger_module.debug('Line creation failed or returned nil')
+                end
             end
         else
-            logger_module.debug(string.format('No line for %s: distance=%.1f', 
-                data.name, (solution.labelPos - solution.objectPos):length()))
+            if generalSettings.debug then
+                logger_module.debug(string.format('No line for %s: distance=%.1f', 
+                    data.name, (solution.labelPos - solution.objectPos):length()))
+            end
         end
         
         -- Store label data
@@ -320,7 +377,9 @@ local function scanAndCreateLabels(profile)
         })
     end
     
-    logger_module.debug(string.format('Created %d labels with jittering', #activeLabels))
+    if generalSettings.debug then
+        logger_module.debug(string.format('Created %d labels with jittering', #activeLabels))
+    end
 end
 
 -- Update label positions and lines
@@ -341,7 +400,7 @@ local function updateLabels(dt)
             local worldPos = projection.getObjectLabelPosition(labelData.object)
             local newObjectPos = projection.worldToScreen(worldPos)
             
-            if newObjectPos and projection.isOnScreen(newObjectPos, 50) then
+            if newObjectPos and projection.isOnScreen(newObjectPos, 300) then
                 labelData.objectPos = newObjectPos
                 labelData.visible = true
                 
@@ -493,6 +552,16 @@ local function onHideHighlights(eventData)
     clearAllLabels()
 end
 
+-- Debug toggle handler
+local function onToggleDebug(eventData)
+    if eventData and eventData.enabled ~= nil then
+        generalSettings.debug = eventData.enabled
+        storage_module.set('general', generalSettings)
+        logger_module.init(generalSettings.debug)
+        logger_module.info(string.format('Debug mode %s', generalSettings.debug and 'enabled' or 'disabled'))
+    end
+end
+
 -- Update loop
 local function onUpdate(dt)
     if not currentProfile then
@@ -542,6 +611,7 @@ return {
     },
     eventHandlers = {
         TTO_ShowHighlights = onShowHighlights,
-        TTO_HideHighlights = onHideHighlights
+        TTO_HideHighlights = onHideHighlights,
+        TTO_ToggleDebug = onToggleDebug
     }
 }

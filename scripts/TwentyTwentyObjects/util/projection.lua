@@ -15,8 +15,14 @@ local logger = require('scripts.TwentyTwentyObjects.util.logger')
 
 -- Update cached screen size (call on resolution change)
 function M.updateScreenSize()
+    -- Force update from UI
     screenSize = ui.screenSize()
-    logger.debug(string.format('Screen size updated: %dx%d', screenSize.x, screenSize.y))
+    -- Check if debug mode is enabled
+    local storage = require('scripts.TwentyTwentyObjects.util.storage')
+    local generalSettings = storage.get('general', { debug = false })
+    if generalSettings.debug then
+        logger.debug(string.format('Screen size updated: %dx%d', screenSize.x, screenSize.y))
+    end
 end
 
 -- Convert world position to screen coordinates
@@ -48,6 +54,10 @@ function M.worldToScreen(worldPos)
     -- Use OpenMW's camera projection function
     local viewportPos = camera.worldToViewportVector(worldPos)
     
+    -- Check if debug mode is enabled
+    local storage = require('scripts.TwentyTwentyObjects.util.storage')
+    local generalSettings = storage.get('general', { debug = false })
+    
     -- The z component is the distance from camera to object
     -- If it's negative or very small, the object is behind or at the camera
     if viewportPos.z <= 1 then
@@ -64,8 +74,33 @@ function M.worldToScreen(worldPos)
     local screenX = viewportPos.x
     local screenY = viewportPos.y
     
+    -- WORKAROUND: At ultrawide resolutions, OpenMW sometimes returns incorrect viewport coordinates
+    -- If the coordinates are way outside reasonable bounds, try to correct them
+    if math.abs(screenX) > screenSize.x * 3 then
+        if generalSettings.debug then
+            logger.debug(string.format('Correcting extreme X coordinate: %.1f -> clamped', screenX))
+        end
+        -- This object is likely at the edge of the screen, clamp it
+        screenX = screenX > 0 and (screenSize.x + 100) or -100
+    end
+    
+    if math.abs(screenY) > screenSize.y * 3 then
+        if generalSettings.debug then
+            logger.debug(string.format('Correcting extreme Y coordinate: %.1f -> clamped', screenY))
+        end
+        screenY = screenY > 0 and (screenSize.y + 100) or -100
+    end
+    
     -- Create screen position vector
     local screenPos = util.vector2(screenX, screenY)
+    
+    -- Log suspicious coordinates
+    if generalSettings.debug and (math.abs(screenX) > screenSize.x * 2 or math.abs(screenY) > screenSize.y * 2) then
+        logger.debug(string.format('Suspicious viewport coordinates: viewport=(%.1f, %.1f, %.1f), screen size=%dx%d', 
+            viewportPos.x, viewportPos.y, viewportPos.z, screenSize.x, screenSize.y))
+        logger.debug(string.format('Camera pos: %s, Object pos: %s, Distance: %.1f', 
+            tostring(camPos), tostring(worldPos), toObject:length()))
+    end
     
     -- Be more lenient with bounds checking - objects slightly off-screen might still have visible labels
     local margin = 200  -- Increased margin
@@ -113,7 +148,7 @@ function M.getObjectLabelPosition(object)
             elseif object.type == types.Container then
                 offset = 0   -- Use center for containers
             elseif object.type == types.Door then
-                offset = 40  -- Mid-height for doors
+                offset = 50  -- Center-ish height for doors (was 40)
             end
         end
         

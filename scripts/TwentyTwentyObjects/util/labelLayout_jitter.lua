@@ -27,16 +27,27 @@ local CONFIG = {
     -- Maximum distance a label can be from its object
     MAX_LABEL_DISTANCE = 200,
     
+    -- Get screen-scaled offset
+    getScaledOffset = function(baseOffset)
+        local ui = require('openmw.ui')
+        local screenSize = ui.screenSize()
+        -- Scale based on screen height (1080p as baseline)
+        local scale = math.max(1.0, screenSize.y / 1080)
+        return baseOffset * scale
+    end,
+    
     -- Preferred label positions (relative to object)
-    PREFERRED_POSITIONS = {
-        util.vector2(0, -5),     -- Above (reduced to 5)
-        util.vector2(20, -5),    -- Upper right (reduced vertical to 5)
-        util.vector2(-20, -5),   -- Upper left (reduced vertical to 5)
-        util.vector2(25, 0),     -- Right
-        util.vector2(-25, 0),    -- Left
-        util.vector2(20, 5),     -- Lower right (reduced vertical to 5)
-        util.vector2(-20, 5),    -- Lower left (reduced vertical to 5)
-        util.vector2(0, 5),      -- Below (reduced to 5)
+    -- These will be scaled based on screen resolution
+    PREFERRED_POSITIONS_BASE = {
+        util.vector2(0, -15),     -- Slightly above center
+        util.vector2(0, -25),     -- Above
+        util.vector2(35, -20),    -- Upper right
+        util.vector2(-35, -20),   -- Upper left
+        util.vector2(45, -5),     -- Right (slightly up)
+        util.vector2(-45, -5),    -- Left (slightly up)
+        util.vector2(35, 15),     -- Lower right
+        util.vector2(-35, 15),    -- Lower left
+        util.vector2(0, 25),      -- Below
     },
     
     -- Line appearance
@@ -47,6 +58,16 @@ local CONFIG = {
     JITTER_ITERATIONS = 10,  -- Max attempts to find good position
     FORCE_STRENGTH = 30,     -- Repulsion force between labels
 }
+
+-- Get scaled preferred positions
+function CONFIG.getPreferredPositions()
+    local positions = {}
+    local scale = CONFIG.getScaledOffset(1.0)
+    for _, basePos in ipairs(CONFIG.PREFERRED_POSITIONS_BASE) do
+        table.insert(positions, basePos * scale)
+    end
+    return positions
+end
 
 -- Label placement solver with jittering
 local JitterSolver = {}
@@ -142,13 +163,16 @@ function JitterSolver:findBestPosition(label, index)
     local bestPos = label.objectPos
     local bestScore = -1000
     
+    -- Get scaled positions
+    local preferredPositions = CONFIG.getPreferredPositions()
+    
     -- Try each preferred position
-    for i, offset in ipairs(CONFIG.PREFERRED_POSITIONS) do
+    for i, offset in ipairs(preferredPositions) do
         local candidatePos = label.objectPos + offset
         local score = self:scorePosition(candidatePos, label, index)
         
         -- Prefer positions that match the label's index (spreads them out)
-        if i == ((index - 1) % #CONFIG.PREFERRED_POSITIONS) + 1 then
+        if i == ((index - 1) % #preferredPositions) + 1 then
             score = score + 10
         end
         

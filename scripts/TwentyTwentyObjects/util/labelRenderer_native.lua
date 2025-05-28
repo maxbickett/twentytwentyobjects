@@ -63,7 +63,7 @@ function M.createNativeLabel(text, options)
         type = ui.TYPE.Container,
         props = {
             -- Positioning
-            anchor = util.vector2(0.5, 1),  -- Center-bottom anchor
+            anchor = util.vector2(0.5, 0.5),  -- Center-center anchor
             position = options.position or util.vector2(0, 0),
             
             -- Native tooltip appearance
