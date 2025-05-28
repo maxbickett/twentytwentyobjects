@@ -84,10 +84,10 @@ New to the mod? Follow these steps:
 1. Open Settings → Mods → Twenty Twenty Objects
 2. Click the "Quick Start" tab
 3. Choose a preset that matches your playstyle:
-   - **🗡️ Loot Hunter**: Find valuable items and containers (Press E)
-   - **👥 NPC Tracker**: Locate NPCs in towns or dungeons (Press Q)
-   - **💎 Thief's Eye**: Spot valuable items in shops (Shift+Z)
-   - **🏛️ Dungeon Delver**: See everything in dark dungeons (Press X)
+   - **🗡️ Loot Hunter**: Find valuable items and containers (Default: `M`)
+   - **👥 NPC Tracker**: Locate NPCs in towns or dungeons (Default: `N`)
+   - **💎 Thief's Eye**: Spot valuable items, containers, and doors (Default: `B`)
+   - **🏛️ Dungeon Delver**: See all interactable objects (items, containers, doors, activators, NPCs, creatures) within 1500 units (Default: `V`)
 4. Click "Use This Preset" to activate
 5. Return to game and press the hotkey!
 
@@ -95,15 +95,25 @@ New to the mod? Follow these steps:
 
 ### Default Profiles
 
-The mod comes with two pre-configured profiles:
+The mod comes with four pre-configured profiles (accessible via the "Quick Start" tab in settings if you wish to re-apply them by clicking "Use This Preset"):
 
-1. **All Items (Default)** - `Shift + X`
-   - Highlights all items and containers within 1500 units
-   - Hold mode (labels disappear when key is released)
+1. **Loot Hunter** - `M` (Hold)
+   - Highlights valuable items (weapons, armor, gold, etc.) and containers within 1200 units.
+   - Hold mode (labels disappear when key is released).
 
-2. **NPCs & Creatures** - `Shift + P`
-   - Highlights NPCs and creatures within 300 units
-   - Toggle mode (press once to show, press again to hide)
+2. **NPC Tracker** - `N` (Toggle)
+   - Highlights NPCs and creatures within 800 units.
+   - Toggle mode (press once to show, press again to hide).
+
+3. **Thief's Eye** - `B` (Hold)
+    - Highlights valuable items, containers, and doors within 600 units. Useful for casing a shop or a house.
+    - Hold mode.
+
+4. **Dungeon Delver** - `V` (Hold)
+    - Highlights all interactable objects (items, containers, doors, activators, NPCs, creatures) within 1500 units.
+    - Hold mode.
+
+You can customize these, add new ones, or delete them as you see fit via the settings menu.
 
 ### Configuring Profiles
 
@@ -163,6 +173,8 @@ This mod is designed with performance in mind:
 ## Troubleshooting
 
 ### Labels not appearing
+- have not tested all variations of FOV settings, and some users have reported
+  that labels are off-center with non-standard FOV.
 - Ensure the mod is properly enabled in the launcher
 - Check that your hotkey isn't conflicting with other mods or game controls
 - Verify objects are within the configured radius
@@ -190,7 +202,9 @@ This mod is fully compatible with:
 No known incompatibilities.
 
 ## Credits
-
+- thanks to seth-js for coming up with the idea for (and building!) great qol featues:
+    - showing the number of items in a stack
+    - showing a door's destination in the label
 - Developed for OpenMW 0.49+
 - Inspired by similar functionality in other games
 - Thanks to the OpenMW team for the excellent Lua API
