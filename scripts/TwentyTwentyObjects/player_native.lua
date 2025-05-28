@@ -70,6 +70,12 @@ local function getObjectName(object)
         name = types.Container.record(object).name
     elseif objType == types.Door then
         name = types.Door.record(object).name
+
+        -- Use door destination as name if available
+        local destination = types.Door.destCell(object)
+        if destination then
+            name = destination.name
+        end
     elseif objType == types.Weapon then
         name = types.Weapon.record(object).name
     elseif objType == types.Armor then
